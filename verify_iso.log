@@ -1,0 +1,20 @@
+Verifying P1 (Correct)...
+Reads: (#(struct:event 4 2 read 1 r_tail_val$0) #(struct:event 6 2 read 0 r_data_val$1))
+Writes: (#(struct:event -1 -1 write 0 0) #(struct:event -2 -1 write 1 0) #(struct:event -3 -1 write 2 0) #(struct:event 1 1 rdma-write 0 1) #(struct:event 3 1 rdma-write 1 1) #(struct:event 8 2 write 2 1))
+RF Constraints (R_tail only): (&& (= 1 idx$2) (= 0 r_tail_val$0))
+Trace Length: 11
+W_data_1: #(struct:event 1 1 rdma-write 0 1)
+Fence_1: #(struct:event 2 1 fence #f #f)
+W_tail_1: #(struct:event 3 1 rdma-write 1 1)
+is-fence?(Fence_1): #t
+po(W_data_1, Fence_1): #t
+po(Fence_1, W_tail_1): #t
+PPO(W_data_1, W_tail_1): #t
+P1 Verified! No violation found.
+
+Verifying P2 (Incorrect)...
+Reads: (#(struct:event 3 2 read 1 r_tail_val$21) #(struct:event 4 2 read 0 r_data_val$22))
+Writes: (#(struct:event -1 -1 write 0 0) #(struct:event -2 -1 write 1 0) #(struct:event -3 -1 write 2 0) #(struct:event 1 1 rdma-write 0 1) #(struct:event 2 1 rdma-write 1 1) #(struct:event 5 2 write 2 1))
+RF Constraints (R_tail only): (&& (= 1 idx$23) (= 0 r_tail_val$21))
+Trace Length: 8
+P2 Verified? (Unexpected)
