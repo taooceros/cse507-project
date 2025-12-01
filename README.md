@@ -17,5 +17,5 @@ racket verify.rkt
 ```
 
 ## Results
-- **P1**: Verified correct.
-- **P2**: Verified correct (unexpectedly, likely due to model constraints).
+- **P1**: Verified correct under both SC and RDMA models.
+- **P2**: Counterexample produced under RDMA (stale read), while SC remains safe.

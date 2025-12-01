@@ -3,6 +3,9 @@
 (provide (all-defined-out))
 (require racket/list)
 
+;; Controls whether we reason under sequential consistency or relaxed RDMA.
+(define current-model (make-parameter 'rdma))
+
 
 ;; Events
 (struct event (id thread-id type addr val) #:transparent)
@@ -38,7 +41,7 @@
 ;; We can represent it as a symbolic choice: for each read, choose one write.
 
 (define (get-writes trace addr)
-  (filter (lambda (e) (and (equal? (event-type e) 'write)
+  (filter (lambda (e) (and (is-write? e)
                            (equal? (event-addr e) addr)))
           trace))
 
@@ -100,23 +103,35 @@
   (or (equal? (event-type e) 'read)
       (equal? (event-type e) 'write)))
 
+(define (is-write? e)
+  (or (equal? (event-type e) 'write)
+      (equal? (event-type e) 'rdma-write)))
+
+(define (is-read? e)
+  (equal? (event-type e) 'read))
+
 (define (is-fence? e)
   (equal? (event-type e) 'fence))
 
+(define (current-model-is-sc?) (equal? (current-model) 'sc))
+(define (current-model-is-rdma?) (equal? (current-model) 'rdma))
+
 (define (ppo trace e1 e2)
-  (and (po trace e1 e2)
-       (or
-        ;; Strong local ordering (SC for local ops)
-        (and (is-local? e1) (is-local? e2))
-        ;; Fence ordering
-        (is-fence? e1)
-        (is-fence? e2)
-        ;; If there is a fence between them in PO
-        (ormap (lambda (f)
-                  (and (is-fence? f)
-                       (po trace e1 f)
-                       (po trace f e2)))
-                trace))))
+  (if (current-model-is-sc?)
+   (po trace e1 e2)
+   (and (po trace e1 e2)
+     (or
+      ;; Strong local ordering (SC for local ops)
+      (and (is-local? e1) (is-local? e2))
+      ;; Fence ordering
+      (is-fence? e1)
+      (is-fence? e2)
+      ;; If there is a fence between them in PO
+      (ormap (lambda (f)
+          (and (is-fence? f)
+            (po trace e1 f)
+            (po trace f e2)))
+        trace)))))
 
 ;; Consistency Axiom
 ;; acyclic(ppo | rf | co | fr)
@@ -137,6 +152,77 @@
              (and (equal? (event-addr w1) (event-addr w2))
                   (or (equal? (event-type w1) 'write) (equal? (event-type w1) 'rdma-write))
                   (or (equal? (event-type w2) 'write) (equal? (event-type w2) 'rdma-write))))))
+
+(define (happens-before? e1 e2)
+  (< (event-id e1) (event-id e2)))
+
+(define (fence-before? e trace)
+  (ormap (lambda (f)
+            (and (is-fence? f)
+                 (equal? (event-thread-id f) (event-thread-id e))
+                 (po trace f e)))
+          trace))
+
+(define (fence-orders? before after trace)
+  (ormap (lambda (f)
+            (and (is-fence? f)
+                 (po trace before f)
+                 (po trace f after)))
+          trace))
+
+(define (most-recent-write? w r trace)
+  (and (happens-before? w r)
+       (not (ormap (lambda (candidate)
+                      (and (is-write? candidate)
+                           (equal? (event-addr candidate) (event-addr w))
+                           (> (event-id candidate) (event-id w))
+                           (< (event-id candidate) (event-id r))))
+                    trace))))
+
+(define (valid-rdma-rf? w r trace)
+  (and (happens-before? w r)
+       (or (not (fence-before? r trace))
+           (most-recent-write? w r trace))
+       (not (ormap (lambda (candidate)
+                      (and (is-write? candidate)
+                           (equal? (event-addr candidate) (event-addr w))
+                           (fence-orders? w candidate trace)
+                           (fence-orders? candidate r trace)))
+                    trace))))
+
+(define (valid-rf-pair? w r trace)
+  (and (is-write? w)
+       (is-read? r)
+       (equal? (event-addr w) (event-addr r))
+       (equal? (event-val w) (event-val r))
+       (cond
+         [(current-model-is-sc?) (most-recent-write? w r trace)]
+         [(current-model-is-rdma?) (valid-rdma-rf? w r trace)]
+         [else #f])))
+
+(define (synthesize-rf trace writes reads)
+  (define choices
+    (for/list ([r reads])
+      (define-symbolic* idx integer?)
+      idx))
+
+  (define (choice-for r)
+    (list-ref choices (index-of reads r)))
+
+  (define rf-constraints
+    (for/and ([r reads] [idx choices])
+      (define option-clauses
+        (for/list ([w writes] [i (in-naturals)])
+          (&& (= idx i)
+              (valid-rf-pair? w r trace))))
+      (apply || option-clauses)))
+
+  (define (rf-rel w r)
+    (and (member r reads)
+         (member w writes)
+         (= (choice-for r) (index-of writes w))))
+
+  (values rf-constraints rf-rel choices))
 
 (define (consistent? trace rf co)
   (define (union r1 r2) (lambda (x y) (or (r1 x y) (r2 x y))))
