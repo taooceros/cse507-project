@@ -1,207 +1,223 @@
 
 === Semantics: sc ===
 Verifying P1 (Correct)...
-Reads: (#(struct:event 7 2 read 2 rv$0) #(struct:event 9 2 read 0 rv$1) #(struct:event 12 2 read 2 rv$2) #(struct:event 14 2 read 1 rv$3))
-Writes: (#(struct:event -1 -1 write 0 0) #(struct:event -2 -1 write 1 0) #(struct:event -3 -1 write 2 0) #(struct:event -4 -1 write 3 0) #(struct:event 1 1 rdma-write 0 1) #(struct:event 3 1 rdma-write 2 1) #(struct:event 4 1 rdma-write 1 2) #(struct:event 6 1 rdma-write 2 2) #(struct:event 11 2 write 3 1) #(struct:event 16 2 write 3 0))
+Reads: (#(struct:event 7 2 read 2 rv$0 #f) #(struct:event 8 2 read 0 rv$1 #f) #(struct:event 10 2 read 2 rv$2 #f) #(struct:event 11 2 read 1 rv$3 #f))
+Writes: (#(struct:event -1 -1 write 0 0 #f) #(struct:event -2 -1 write 1 0 #f) #(struct:event -3 -1 write 2 0 #f) #(struct:event -4 -1 write 3 0 #f) #(struct:event 1 1 rdma-write 0 1 qp-a) #(struct:event 3 1 rdma-write 2 1 qp-a) #(struct:event 4 1 rdma-write 1 2 qp-a) #(struct:event 6 1 rdma-write 2 2 qp-a) #(struct:event 9 2 write 3 1 #f) #(struct:event 12 2 write 3 0 #f))
 Baseline constraints SAT? #t
-Base rf choices matrix: ((b$4 b$5 b$6 b$7 b$8 b$9 b$10 b$11 b$12 b$13) (b$14 b$15 b$16 b$17 b$18 b$19 b$20 b$21 b$22 b$23) (b$24 b$25 b$26 b$27 b$28 b$29 b$30 b$31 b$32 b$33) (#f #f #f #f #f #f #f #f #t #f))
-Base read values: (rv$0 rv$1 rv$2 1)
+Base rf choices matrix: ((b$4 b$5 b$6 b$7 b$8 #f b$10 b$11 b$12 b$13) (b$14 b$15 b$16 b$17 b$18 b$19 b$20 b$21 b$22 b$23) (b$24 b$25 b$26 b$27 b$28 b$29 b$30 #f b$32 b$33) (#f #f #f #f #f #f #f #f #t #f))
+Base read values: (0 2 1 1)
 Debug (fixed rf choices) skipped in generalized model.
-Model found. Ranks:
-Event -1 (Type write): Rank r$54
-Event -2 (Type write): Rank r$55
-Event -3 (Type write): Rank r$56
-Event -4 (Type write): Rank r$57
-Event 1 (Type rdma-write): Rank r$58
-Event 2 (Type fence): Rank r$59
-Event 3 (Type rdma-write): Rank r$60
-Event 4 (Type rdma-write): Rank r$61
-Event 5 (Type fence): Rank r$62
-Event 6 (Type rdma-write): Rank r$63
-Event 7 (Type read): Rank r$64
-Event 8 (Type fence): Rank r$65
-Event 9 (Type read): Rank r$66
-Event 10 (Type fence): Rank r$67
-Event 11 (Type write): Rank r$68
-Event 12 (Type read): Rank r$69
-Event 13 (Type fence): Rank r$70
-Event 14 (Type read): Rank 1
-Event 15 (Type fence): Rank r$72
-Event 16 (Type write): Rank 0
-Read values: (1 2 2 2)
-RF matrix (resolved): ((b$4 b$5 b$6 b$7 b$8 b$9 b$10 b$11 b$12 b$13) (b$14 b$15 b$16 b$17 b$18 b$19 b$20 b$21 b$22 b$23) (b$24 b$25 b$26 b$27 b$28 b$29 b$30 b$31 b$32 b$33) (#f #f #f #f #f #f #t #f #f #f))
-rf-constraints satisfied? #t
-latest-visible? #t
-release-acquire? #t
-derived-hb? #t
-P1 Failed! Counterexample found.
-(model
- [rv$0 1]
- [rv$1 2]
- [rv$2 2]
- [rv$3 2]
- [b$34 #f]
- [b$35 #f]
- [b$36 #f]
- [b$37 #f]
- [b$38 #f]
- [b$39 #f]
- [b$40 #t]
- [b$41 #f]
- [b$42 #f]
- [b$43 #f]
- [rank$47 0]
- [rank$53 1]
- [r$71 1]
- [r$73 0])
+P1 Verified! No violation found.
+
 Verifying P2 (Incorrect)...
-Reads: (#(struct:event 5 2 read 2 rv$74) #(struct:event 6 2 read 0 rv$75) #(struct:event 8 2 read 2 rv$76) #(struct:event 9 2 read 1 rv$77))
-Writes: (#(struct:event -1 -1 write 0 0) #(struct:event -2 -1 write 1 0) #(struct:event -3 -1 write 2 0) #(struct:event -4 -1 write 3 0) #(struct:event 1 1 rdma-write 0 1) #(struct:event 2 1 rdma-write 2 1) #(struct:event 3 1 rdma-write 1 2) #(struct:event 4 1 rdma-write 2 2) #(struct:event 7 2 write 3 1) #(struct:event 10 2 write 3 0))
+Reads: (#(struct:event 7 2 read 2 rv$70 #f) #(struct:event 8 2 read 0 rv$71 #f) #(struct:event 10 2 read 2 rv$72 #f) #(struct:event 11 2 read 1 rv$73 #f))
+Writes: (#(struct:event -1 -1 write 0 0 #f) #(struct:event -2 -1 write 1 0 #f) #(struct:event -3 -1 write 2 0 #f) #(struct:event -4 -1 write 3 0 #f) #(struct:event 1 1 rdma-write 2 1 qp-a) #(struct:event 2 1 rdma-write 0 1 qp-a) #(struct:event 3 1 rdma-write 2 2 qp-a) #(struct:event 4 1 rdma-write 1 2 qp-a) #(struct:event 9 2 write 3 1 #f) #(struct:event 12 2 write 3 0 #f))
 Baseline constraints SAT? #t
-Base rf choices matrix: ((b$78 b$79 b$80 b$81 b$82 b$83 b$84 b$85 b$86 b$87) (b$88 b$89 b$90 b$91 b$92 b$93 b$94 b$95 b$96 b$97) (b$98 b$99 b$100 b$101 b$102 b$103 b$104 b$105 b$106 b$107) (#f #f #f #f #f #f #f #f #t #f))
-Base read values: (rv$74 rv$75 rv$76 1)
+Base rf choices matrix: ((b$74 b$75 b$76 b$77 #f b$79 b$80 b$81 b$82 b$83) (b$84 b$85 b$86 b$87 b$88 b$89 b$90 b$91 b$92 b$93) (b$94 b$95 b$96 b$97 b$98 b$99 #f b$101 b$102 b$103) (#f #f #f #t #f #f #f #f #f #f))
+Base read values: (0 rv$71 1 0)
 Debug (fixed rf choices) skipped in generalized model.
 Model found. Ranks:
-Event -1 (Type write): Rank r$128
-Event -2 (Type write): Rank r$129
-Event -3 (Type write): Rank r$130
-Event -4 (Type write): Rank r$131
-Event 1 (Type rdma-write): Rank r$132
-Event 2 (Type rdma-write): Rank r$133
-Event 3 (Type rdma-write): Rank r$134
-Event 4 (Type rdma-write): Rank r$135
-Event 5 (Type read): Rank r$136
-Event 6 (Type read): Rank r$137
-Event 7 (Type write): Rank r$138
-Event 8 (Type read): Rank r$139
-Event 9 (Type read): Rank 1
-Event 10 (Type write): Rank 0
-Read values: (1 2 2 2)
-RF matrix (resolved): ((b$78 b$79 b$80 b$81 b$82 b$83 b$84 b$85 b$86 b$87) (b$88 b$89 b$90 b$91 b$92 b$93 b$94 b$95 b$96 b$97) (b$98 b$99 b$100 b$101 b$102 b$103 b$104 b$105 b$106 b$107) (#f #f #f #f #f #f #t #f #f #f))
+Event -1 (Type write): Rank r$124
+Event -2 (Type write): Rank r$125
+Event -3 (Type write): Rank r$126
+Event -4 (Type write): Rank 0
+Event 1 (Type rdma-write): Rank r$128
+Event 2 (Type rdma-write): Rank r$129
+Event 3 (Type rdma-write): Rank r$130
+Event 4 (Type rdma-write): Rank r$131
+Event 7 (Type read): Rank r$132
+Event 8 (Type read): Rank r$133
+Event 9 (Type write): Rank r$134
+Event 10 (Type read): Rank r$135
+Event 11 (Type read): Rank 0
+Event 12 (Type write): Rank -1
+Read values: (2 2 2 0)
+RF matrix (resolved): ((b$74 b$75 b$76 b$77 #t b$79 b$80 b$81 b$82 b$83) (b$84 b$85 b$86 b$87 b$88 b$89 b$90 b$91 b$92 b$93) (b$94 b$95 b$96 b$97 b$98 b$99 #t b$101 b$102 b$103) (#t #f #f #f #f #f #f #f #f #f))
 rf-constraints satisfied? #t
 latest-visible? #t
 release-acquire? #t
 derived-hb? #t
-P2 Failed! Counterexample found.
+P2a Failed! Counterexample found.
 (model
- [rv$74 1]
- [rv$75 2]
- [rv$76 2]
- [rv$77 2]
+ [rv$70 2]
+ [rv$71 2]
+ [rv$72 2]
+ [rv$73 0]
+ [b$78 #t]
+ [b$100 #t]
+ [b$104 #t]
+ [b$105 #f]
+ [b$106 #f]
+ [b$107 #f]
  [b$108 #f]
  [b$109 #f]
  [b$110 #f]
  [b$111 #f]
  [b$112 #f]
  [b$113 #f]
- [b$114 #t]
- [b$115 #f]
- [b$116 #f]
- [b$117 #f]
- [rank$121 0]
- [rank$127 1]
- [r$140 1]
- [r$141 0])
-=== Semantics: relaxed ===
-Verifying P1 (Correct)...
-Reads: (#(struct:event 7 2 read 2 rv$142) #(struct:event 9 2 read 0 rv$143) #(struct:event 12 2 read 2 rv$144) #(struct:event 14 2 read 1 rv$145))
-Writes: (#(struct:event -1 -1 write 0 0) #(struct:event -2 -1 write 1 0) #(struct:event -3 -1 write 2 0) #(struct:event -4 -1 write 3 0) #(struct:event 1 1 rdma-write 0 1) #(struct:event 3 1 rdma-write 2 1) #(struct:event 4 1 rdma-write 1 2) #(struct:event 6 1 rdma-write 2 2) #(struct:event 11 2 write 3 1) #(struct:event 16 2 write 3 0))
+ [rank$117 0]
+ [rank$123 1]
+ [r$127 0]
+ [r$136 0]
+ [r$137 -1])
+Verifying P2b (Incorrect)...
+Reads: (#(struct:event 5 2 read 2 rv$138 #f) #(struct:event 6 2 read 0 rv$139 #f) #(struct:event 8 2 read 2 rv$140 #f) #(struct:event 9 2 read 1 rv$141 #f))
+Writes: (#(struct:event -1 -1 write 0 0 #f) #(struct:event -2 -1 write 1 0 #f) #(struct:event -3 -1 write 2 0 #f) #(struct:event -4 -1 write 3 0 #f) #(struct:event 1 1 rdma-write 0 1 qp-a) #(struct:event 3 1 rdma-write 2 1 qp-b) #(struct:event 4 1 rdma-write 1 2 qp-a) #(struct:event 6 1 rdma-write 2 2 qp-b) #(struct:event 7 2 write 3 1 #f) #(struct:event 10 2 write 3 0 #f))
 Baseline constraints SAT? #t
-Base rf choices matrix: ((b$146 b$147 b$148 b$149 b$150 b$151 b$152 b$153 b$154 b$155) (b$156 b$157 b$158 b$159 b$160 b$161 b$162 b$163 b$164 b$165) (b$166 b$167 b$168 b$169 b$170 b$171 b$172 b$173 b$174 b$175) (#f #f #f #f #f #f #f #f #t #f))
-Base read values: (rv$142 rv$143 rv$144 1)
+Base rf choices matrix: ((b$142 b$143 b$144 b$145 b$146 #f b$148 b$149 b$150 b$151) (b$152 b$153 b$154 b$155 b$156 b$157 b$158 b$159 b$160 b$161) (b$162 b$163 b$164 b$165 b$166 b$167 b$168 #f b$170 b$171) (#f #f #f #t #f #f #f #f #f #f))
+Base read values: (0 rv$139 1 0)
 Debug (fixed rf choices) skipped in generalized model.
 Model found. Ranks:
-Event -1 (Type write): Rank r$196
-Event -2 (Type write): Rank r$197
-Event -3 (Type write): Rank r$198
-Event -4 (Type write): Rank r$199
-Event 1 (Type rdma-write): Rank r$200
-Event 2 (Type fence): Rank r$201
-Event 3 (Type rdma-write): Rank r$202
-Event 4 (Type rdma-write): Rank r$203
-Event 5 (Type fence): Rank r$204
-Event 6 (Type rdma-write): Rank r$205
-Event 7 (Type read): Rank r$206
-Event 8 (Type fence): Rank r$207
-Event 9 (Type read): Rank r$208
-Event 10 (Type fence): Rank r$209
-Event 11 (Type write): Rank r$210
-Event 12 (Type read): Rank r$211
-Event 13 (Type fence): Rank r$212
-Event 14 (Type read): Rank 1
-Event 15 (Type fence): Rank r$214
-Event 16 (Type write): Rank 0
-Read values: (1 2 2 2)
-RF matrix (resolved): ((b$146 b$147 b$148 b$149 b$150 b$151 b$152 b$153 b$154 b$155) (b$156 b$157 b$158 b$159 b$160 b$161 b$162 b$163 b$164 b$165) (b$166 b$167 b$168 b$169 b$170 b$171 b$172 b$173 b$174 b$175) (#f #f #f #f #f #f #t #f #f #f))
+Event -1 (Type write): Rank r$192
+Event -2 (Type write): Rank r$193
+Event -3 (Type write): Rank r$194
+Event -4 (Type write): Rank 0
+Event 1 (Type rdma-write): Rank r$196
+Event 2 (Type flush): Rank r$197
+Event 3 (Type rdma-write): Rank r$198
+Event 4 (Type rdma-write): Rank r$199
+Event 5 (Type flush): Rank r$200
+Event 6 (Type rdma-write): Rank r$201
+Event 5 (Type read): Rank r$202
+Event 6 (Type read): Rank r$203
+Event 7 (Type write): Rank r$204
+Event 8 (Type read): Rank r$205
+Event 9 (Type read): Rank 0
+Event 10 (Type write): Rank -1
+Read values: (2 2 2 0)
+RF matrix (resolved): ((b$142 b$143 b$144 b$145 b$146 #t b$148 b$149 b$150 b$151) (b$152 b$153 b$154 b$155 b$156 b$157 b$158 b$159 b$160 b$161) (b$162 b$163 b$164 b$165 b$166 b$167 b$168 #t b$170 b$171) (#t #f #f #f #f #f #f #f #f #f))
 rf-constraints satisfied? #t
 latest-visible? #t
 release-acquire? #t
 derived-hb? #t
-P1 Failed! Counterexample found.
+P2b Failed! Counterexample found.
 (model
- [rv$142 1]
- [rv$143 2]
- [rv$144 2]
- [rv$145 2]
+ [rv$138 2]
+ [rv$139 2]
+ [rv$140 2]
+ [rv$141 0]
+ [b$147 #t]
+ [b$169 #t]
+ [b$172 #t]
+ [b$173 #f]
+ [b$174 #f]
+ [b$175 #f]
  [b$176 #f]
  [b$177 #f]
  [b$178 #f]
  [b$179 #f]
  [b$180 #f]
  [b$181 #f]
- [b$182 #t]
- [b$183 #f]
- [b$184 #f]
- [b$185 #f]
- [rank$189 0]
- [rank$195 1]
- [r$213 1]
- [r$215 0])
-Verifying P2 (Incorrect)...
-Reads: (#(struct:event 5 2 read 2 rv$216) #(struct:event 6 2 read 0 rv$217) #(struct:event 8 2 read 2 rv$218) #(struct:event 9 2 read 1 rv$219))
-Writes: (#(struct:event -1 -1 write 0 0) #(struct:event -2 -1 write 1 0) #(struct:event -3 -1 write 2 0) #(struct:event -4 -1 write 3 0) #(struct:event 1 1 rdma-write 0 1) #(struct:event 2 1 rdma-write 2 1) #(struct:event 3 1 rdma-write 1 2) #(struct:event 4 1 rdma-write 2 2) #(struct:event 7 2 write 3 1) #(struct:event 10 2 write 3 0))
+ [rank$185 0]
+ [rank$191 1]
+ [r$195 0]
+ [r$206 0]
+ [r$207 -1] ...)
+=== Semantics: relaxed ===
+Verifying P1 (Correct)...
+Reads: (#(struct:event 7 2 read 2 rv$208 #f) #(struct:event 8 2 read 0 rv$209 #f) #(struct:event 10 2 read 2 rv$210 #f) #(struct:event 11 2 read 1 rv$211 #f))
+Writes: (#(struct:event -1 -1 write 0 0 #f) #(struct:event -2 -1 write 1 0 #f) #(struct:event -3 -1 write 2 0 #f) #(struct:event -4 -1 write 3 0 #f) #(struct:event 1 1 rdma-write 0 1 qp-a) #(struct:event 3 1 rdma-write 2 1 qp-a) #(struct:event 4 1 rdma-write 1 2 qp-a) #(struct:event 6 1 rdma-write 2 2 qp-a) #(struct:event 9 2 write 3 1 #f) #(struct:event 12 2 write 3 0 #f))
 Baseline constraints SAT? #t
-Base rf choices matrix: ((b$220 b$221 b$222 b$223 b$224 b$225 b$226 b$227 b$228 b$229) (b$230 b$231 b$232 b$233 b$234 b$235 b$236 b$237 b$238 b$239) (b$240 b$241 b$242 b$243 b$244 b$245 b$246 b$247 b$248 b$249) (#f #f #f #f #f #f #f #f #t #f))
-Base read values: (rv$216 rv$217 rv$218 1)
+Base rf choices matrix: ((b$212 b$213 b$214 b$215 b$216 #f b$218 b$219 b$220 b$221) (b$222 b$223 b$224 b$225 b$226 b$227 b$228 b$229 b$230 b$231) (b$232 b$233 b$234 b$235 b$236 b$237 b$238 #f b$240 b$241) (#f #f #f #f #f #t #f #f #f #f))
+Base read values: (0 2 1 1)
+Debug (fixed rf choices) skipped in generalized model.
+P1 Verified! No violation found.
+
+Verifying P2 (Incorrect)...
+Reads: (#(struct:event 7 2 read 2 rv$278 #f) #(struct:event 8 2 read 0 rv$279 #f) #(struct:event 10 2 read 2 rv$280 #f) #(struct:event 11 2 read 1 rv$281 #f))
+Writes: (#(struct:event -1 -1 write 0 0 #f) #(struct:event -2 -1 write 1 0 #f) #(struct:event -3 -1 write 2 0 #f) #(struct:event -4 -1 write 3 0 #f) #(struct:event 1 1 rdma-write 2 1 qp-a) #(struct:event 2 1 rdma-write 0 1 qp-a) #(struct:event 3 1 rdma-write 2 2 qp-a) #(struct:event 4 1 rdma-write 1 2 qp-a) #(struct:event 9 2 write 3 1 #f) #(struct:event 12 2 write 3 0 #f))
+Baseline constraints SAT? #t
+Base rf choices matrix: ((b$282 b$283 b$284 b$285 #f b$287 b$288 b$289 b$290 b$291) (b$292 b$293 b$294 b$295 b$296 b$297 b$298 b$299 b$300 b$301) (b$302 b$303 b$304 b$305 b$306 b$307 #f b$309 b$310 b$311) (#f #f #f #f #f #f #f #t #f #f))
+Base read values: (0 rv$279 1 2)
 Debug (fixed rf choices) skipped in generalized model.
 Model found. Ranks:
-Event -1 (Type write): Rank r$270
-Event -2 (Type write): Rank r$271
-Event -3 (Type write): Rank r$272
-Event -4 (Type write): Rank r$273
-Event 1 (Type rdma-write): Rank r$274
-Event 2 (Type rdma-write): Rank r$275
-Event 3 (Type rdma-write): Rank r$276
-Event 4 (Type rdma-write): Rank r$277
-Event 5 (Type read): Rank r$278
-Event 6 (Type read): Rank r$279
-Event 7 (Type write): Rank r$280
-Event 8 (Type read): Rank r$281
-Event 9 (Type read): Rank 1
-Event 10 (Type write): Rank 0
-Read values: (1 2 2 2)
-RF matrix (resolved): ((b$220 b$221 b$222 b$223 b$224 b$225 b$226 b$227 b$228 b$229) (b$230 b$231 b$232 b$233 b$234 b$235 b$236 b$237 b$238 b$239) (b$240 b$241 b$242 b$243 b$244 b$245 b$246 b$247 b$248 b$249) (#f #f #f #f #f #f #t #f #f #f))
+Event -1 (Type write): Rank r$332
+Event -2 (Type write): Rank r$333
+Event -3 (Type write): Rank r$334
+Event -4 (Type write): Rank 0
+Event 1 (Type rdma-write): Rank r$336
+Event 2 (Type rdma-write): Rank r$337
+Event 3 (Type rdma-write): Rank r$338
+Event 4 (Type rdma-write): Rank r$339
+Event 7 (Type read): Rank r$340
+Event 8 (Type read): Rank r$341
+Event 9 (Type write): Rank r$342
+Event 10 (Type read): Rank r$343
+Event 11 (Type read): Rank 0
+Event 12 (Type write): Rank r$345
+Read values: (2 2 2 0)
+RF matrix (resolved): ((b$282 b$283 b$284 b$285 #t b$287 b$288 b$289 b$290 b$291) (b$292 b$293 b$294 b$295 b$296 b$297 b$298 b$299 b$300 b$301) (b$302 b$303 b$304 b$305 b$306 b$307 #t b$309 b$310 b$311) (#f #t #f #f #f #f #f #f #f #f))
 rf-constraints satisfied? #t
 latest-visible? #t
 release-acquire? #t
 derived-hb? #t
-P2 Failed! Counterexample found.
+P2a Failed! Counterexample found.
 (model
- [rv$216 1]
- [rv$217 2]
- [rv$218 2]
- [rv$219 2]
- [b$250 #f]
- [b$251 #f]
- [b$252 #f]
- [b$253 #f]
- [b$254 #f]
- [b$255 #f]
- [b$256 #t]
- [b$257 #f]
- [b$258 #f]
- [b$259 #f]
- [rank$263 0]
- [rank$269 1]
- [r$282 1]
- [r$283 0])
+ [rv$278 2]
+ [rv$279 2]
+ [rv$280 2]
+ [rv$281 0]
+ [b$286 #t]
+ [b$308 #t]
+ [b$312 #f]
+ [b$313 #t]
+ [b$314 #f]
+ [b$315 #f]
+ [b$316 #f]
+ [b$317 #f]
+ [b$318 #f]
+ [b$319 #f]
+ [b$320 #f]
+ [b$321 #f]
+ [r$335 0]
+ [r$344 0])
+Verifying P2b (Incorrect)...
+Reads: (#(struct:event 5 2 read 2 rv$346 #f) #(struct:event 6 2 read 0 rv$347 #f) #(struct:event 8 2 read 2 rv$348 #f) #(struct:event 9 2 read 1 rv$349 #f))
+Writes: (#(struct:event -1 -1 write 0 0 #f) #(struct:event -2 -1 write 1 0 #f) #(struct:event -3 -1 write 2 0 #f) #(struct:event -4 -1 write 3 0 #f) #(struct:event 1 1 rdma-write 0 1 qp-a) #(struct:event 3 1 rdma-write 2 1 qp-b) #(struct:event 4 1 rdma-write 1 2 qp-a) #(struct:event 6 1 rdma-write 2 2 qp-b) #(struct:event 7 2 write 3 1 #f) #(struct:event 10 2 write 3 0 #f))
+Baseline constraints SAT? #t
+Base rf choices matrix: ((b$350 b$351 b$352 b$353 b$354 #f b$356 b$357 b$358 b$359) (b$360 b$361 b$362 b$363 b$364 b$365 b$366 b$367 b$368 b$369) (b$370 b$371 b$372 b$373 b$374 b$375 b$376 #f b$378 b$379) (#f #f #f #f #f #f #f #t #f #f))
+Base read values: (0 rv$347 1 2)
+Debug (fixed rf choices) skipped in generalized model.
+Model found. Ranks:
+Event -1 (Type write): Rank r$400
+Event -2 (Type write): Rank r$401
+Event -3 (Type write): Rank r$402
+Event -4 (Type write): Rank 0
+Event 1 (Type rdma-write): Rank r$404
+Event 2 (Type flush): Rank r$405
+Event 3 (Type rdma-write): Rank r$406
+Event 4 (Type rdma-write): Rank r$407
+Event 5 (Type flush): Rank r$408
+Event 6 (Type rdma-write): Rank r$409
+Event 5 (Type read): Rank r$410
+Event 6 (Type read): Rank r$411
+Event 7 (Type write): Rank r$412
+Event 8 (Type read): Rank r$413
+Event 9 (Type read): Rank 0
+Event 10 (Type write): Rank r$415
+Read values: (2 2 2 0)
+RF matrix (resolved): ((b$350 b$351 b$352 b$353 b$354 #t b$356 b$357 b$358 b$359) (b$360 b$361 b$362 b$363 b$364 b$365 b$366 b$367 b$368 b$369) (b$370 b$371 b$372 b$373 b$374 b$375 b$376 #t b$378 b$379) (#f #t #f #f #f #f #f #f #f #f))
+rf-constraints satisfied? #t
+latest-visible? #t
+release-acquire? #t
+derived-hb? #t
+P2b Failed! Counterexample found.
+(model
+ [rv$346 2]
+ [rv$347 2]
+ [rv$348 2]
+ [rv$349 0]
+ [b$355 #t]
+ [b$377 #t]
+ [b$380 #f]
+ [b$381 #t]
+ [b$382 #f]
+ [b$383 #f]
+ [b$384 #f]
+ [b$385 #f]
+ [b$386 #f]
+ [b$387 #f]
+ [b$388 #f]
+ [b$389 #f]
+ [r$403 0]
+ [r$414 0])
