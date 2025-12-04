@@ -1,5 +1,5 @@
 #lang rosette
-(require racket/list)
+(require racket/list racket/string racket/format)
 (require "model.rkt" "ring_buffer.rkt")
 
 ;; Verification driver wiring together the memory-model predicates with
@@ -32,6 +32,19 @@
    (list 'addr (event-addr e))
    (list 'val (event-val e))
    (list 'mode (event-mode e))))
+
+(define (format-trace trace)
+  (define sorted (sort trace < #:key event-id))
+  (string-join
+   (for/list ([e sorted])
+     (format "  [~a] Thread ~a: ~a ~a (Val: ~a, Mode: ~a)"
+             (~r (event-id e) #:min-width 3)
+             (event-thread-id e)
+             (~a (event-type e) #:width 5)
+             (~a (event-addr e) #:width 5)
+             (~a (event-val e) #:width 2)
+             (event-mode e)))
+   "\n"))
 
 (define (last-before lst pred?)
   ;; last-before: return the most recent list item that satisfies pred?.
@@ -221,7 +234,8 @@
                               [rank event-ranks])
                      (list (event-id e) (eval* rank)))
                    '())
-        'counterexample counterexample))
+        'counterexample counterexample
+        'model-trace evaluated-trace))
 
 ;; scenario->report: turn a scenario hash into a human-readable summary.
 (define (scenario->report scenario)
@@ -229,13 +243,12 @@
   (define mode (hash-ref scenario 'mode))
   (cond
     [(eq? status 'unsat)
-     (format "Mode ~a: no stale read is possible." mode)]
+     (format "Mode ~a: UNSAT (Verified - no stale reads)." mode)]
     [else
-     (define reads (hash-ref scenario 'read-values))
-     (define rf-map (hash-ref scenario 'rf))
-       (define cex (hash-ref scenario 'counterexample))
-       (format "Mode ~a: stale read found with values ~a, rf map ~a, counterexample ~a"
-         mode reads rf-map cex)]))
+     (define trace (hash-ref scenario 'model-trace))
+     (format "Mode ~a: SAT (Stale read detected!)\nTrace:\n~a"
+             mode
+             (format-trace trace))]))
 
 ;; check-p1: analyze the fully synchronized producer/consumer schedule.
 (define (check-p1 mode)
@@ -253,6 +266,6 @@
   (analyze-scenario make-trace-p3 mode))
 
 
-; (check-p1 'sc)
-(check-p3 'sc)
+(displayln (scenario->report (check-p3 'sc)))
+; (displayln (scenario->report (check-p3 'sc)))
 
