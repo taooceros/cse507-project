@@ -19,6 +19,7 @@
 (define (mode-sc? e) (equal? (event-mode e) 'SC))
 (define (mode-rel? e) (equal? (event-mode e) 'REL))
 (define (mode-acq? e) (equal? (event-mode e) 'ACQ))
+(define (mode-rlx? e) (equal? (event-mode e) 'RLX))
 
 ;; Program order: per-thread id ordering.
 (define (po trace e1 e2)

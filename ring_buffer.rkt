@@ -15,10 +15,10 @@
 ;; P1: Correct synchronization (tail publishes with REL, consumer acquires)
 (define (initial-events)
   (list
-  (mk-write -4 0 DATA0 0 #:mode 'SC)
-  (mk-write -3 0 DATA1 0 #:mode 'SC)
-  (mk-write -2 0 TAIL 0 #:mode 'SC)
-  (mk-write -1 0 HEAD 0 #:mode 'SC)))
+  (mk-write -4 1 DATA0 0 #:mode 'SC)
+  (mk-write -3 1 DATA1 0 #:mode 'SC)
+  (mk-write -2 1 TAIL 0 #:mode 'SC)
+  (mk-write -1 1 HEAD 0 #:mode 'SC)))
 
 (define (make-trace-p1 rvals)
   (append
@@ -67,7 +67,7 @@
     (mk-write 3 1 DATA1 2 #:mode 'SC)
     (mk-write 4 1 TAIL 2 #:mode 'REL)
 
-    (mk-read 5 2 TAIL (rv rvals 0) #:mode 'SC)
+    (mk-read 5 2 TAIL (rv rvals 0) #:mode 'RLX)
     (mk-read 6 2 DATA0 (rv rvals 1) #:mode 'SC)
     (mk-write 7 2 HEAD 1 #:mode 'SC)
     (mk-read 8 2 TAIL (rv rvals 2) #:mode 'SC)

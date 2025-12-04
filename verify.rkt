@@ -104,7 +104,7 @@
 (define (scenario-mode->settings mode)
   (case mode
     [(sc) (values ppo-sc #t)]
-    [(ra) (values ppo-relaxed #t)]
+  [(ra) (values ppo-relaxed #t)]
     [(relaxed) (values ppo-relaxed #f)]
     [else (error 'analyze-scenario "unknown mode ~a" mode)]))
 
@@ -172,11 +172,13 @@
   ;; Stale read manifests if consumer reads pull from the initial slot writes.
   (define d0-init (event-by-id trace -4))
   (define d1-init (event-by-id trace -3))
+  (define t0-read (event-by-id trace 5))
   (define d0-read (event-by-id trace 6))
+  (define t1-read (event-by-id trace 8))
   (define d1-read (event-by-id trace 9))
   (define stale?
-    (or (rf d0-init d0-read)
-        (rf d1-init d1-read)))
+    (or (and (>= (event-val t0-read) 1) (rf d0-init d0-read))
+        (and (>= (event-val t1-read) 2) (rf d1-init d1-read))))
   (assert stale?)
 
   (define result (solve #t))
@@ -266,6 +268,6 @@
   (analyze-scenario make-trace-p3 mode))
 
 
-(displayln (scenario->report (check-p3 'sc)))
+(displayln (scenario->report (check-p2b 'sc)))
 ; (displayln (scenario->report (check-p3 'sc)))
 
