@@ -284,27 +284,32 @@ fn run_deadlock_test<T: RingBufferApi>(name: &str) {
     let producer_affinity = core_affinity::get_core_ids().unwrap()[12];
     let consumer_affinity = core_affinity::get_core_ids().unwrap()[14];
 
-    use std::sync::{Arc, Barrier, Mutex};
-    let producer_thread = Arc::new(Mutex::new(None::<thread::Thread>));
-    let consumer_thread = Arc::new(Mutex::new(None::<thread::Thread>));
+    use std::sync::{Arc, Barrier, Condvar, Mutex};
+    // producer_cv: Producer waits on this when buffer is full. Consumer notifies this when it consumes.
+    let producer_cv = Arc::new((Mutex::new(()), Condvar::new()));
+    // consumer_cv: Consumer waits on this when buffer is empty. Producer notifies this when it produces.
+    let consumer_cv = Arc::new((Mutex::new(()), Condvar::new()));
     let barrier = Arc::new(Barrier::new(2));
 
-    let p_thread = producer_thread.clone();
-    let c_thread = consumer_thread.clone();
+    let p_cv = producer_cv.clone();
+    let c_cv = consumer_cv.clone();
     let b_prod = barrier.clone();
 
     let producer = thread::spawn(move || {
         core_affinity::set_for_current(producer_affinity);
-        *p_thread.lock().unwrap() = Some(thread::current());
         b_prod.wait();
 
         let mut produced = 0;
+        let mut guard = p_cv.0.lock().unwrap();
         while produced < total_bytes {
             let (addr, len) = producer_ring.get_space_buf();
             if len == 0 {
-                thread::park();
+                guard = p_cv.1.wait(guard).unwrap();
                 continue;
             }
+
+            // Release lock while processing to allow consumer to notify
+            drop(guard);
 
             // len is in bytes.
             let len_items = len / 8;
@@ -320,42 +325,47 @@ fn run_deadlock_test<T: RingBufferApi>(name: &str) {
                         *ptr.add(i) = (produced_items + i) as u64;
                         if (i + 1) % batch_size == 0 {
                             if producer_ring.produce(batch_size * size_of::<u64>()) {
-                                if let Some(t) = c_thread.lock().unwrap().as_ref() {
-                                    t.unpark();
-                                }
+                                let (lock, cvar) = &*c_cv;
+                                let _g = lock.lock().unwrap();
+                                cvar.notify_one();
                             }
                         }
                     }
                     let rem = to_write_items % batch_size;
                     if rem > 0 {
                         if producer_ring.produce(rem * size_of::<u64>()) {
-                            if let Some(t) = c_thread.lock().unwrap().as_ref() {
-                                t.unpark();
-                            }
+                            let (lock, cvar) = &*c_cv;
+                            let _g = lock.lock().unwrap();
+                            cvar.notify_one();
                         }
                     }
                 }
                 produced += to_write_items * 8;
             }
+            // Re-acquire lock for next iteration check
+            guard = p_cv.0.lock().unwrap();
         }
     });
 
-    let p_thread_c = producer_thread.clone();
-    let c_thread_c = consumer_thread.clone();
+    let p_cv_c = producer_cv.clone();
+    let c_cv_c = consumer_cv.clone();
     let b_cons = barrier.clone();
 
     let consumer = thread::spawn(move || {
         core_affinity::set_for_current(consumer_affinity);
-        *c_thread_c.lock().unwrap() = Some(thread::current());
         b_cons.wait();
 
         let mut consumed = 0;
+        let mut guard = c_cv_c.0.lock().unwrap();
         while consumed < total_bytes {
             let (addr, len) = consumer_ring.get_data_buf();
             if len == 0 {
-                thread::park();
+                guard = c_cv_c.1.wait(guard).unwrap();
                 continue;
             }
+
+            // Release lock while processing
+            drop(guard);
 
             let consumed_items = consumed / 8;
             let len_items = len / 8;
@@ -371,23 +381,25 @@ fn run_deadlock_test<T: RingBufferApi>(name: &str) {
                         }
                         if (i + 1) % batch_size == 0 {
                             if consumer_ring.consume(batch_size * size_of::<u64>()) {
-                                if let Some(t) = p_thread_c.lock().unwrap().as_ref() {
-                                    t.unpark();
-                                }
+                                let (lock, cvar) = &*p_cv_c;
+                                let _g = lock.lock().unwrap();
+                                cvar.notify_one();
                             }
                         }
                     }
                     let rem = len_items % batch_size;
                     if rem > 0 {
                         if consumer_ring.consume(rem * size_of::<u64>()) {
-                            if let Some(t) = p_thread_c.lock().unwrap().as_ref() {
-                                t.unpark();
-                            }
+                            let (lock, cvar) = &*p_cv_c;
+                            let _g = lock.lock().unwrap();
+                            cvar.notify_one();
                         }
                     }
                 }
                 consumed += len_items * 8;
             }
+            // Re-acquire lock for next iteration check
+            guard = c_cv_c.0.lock().unwrap();
         }
     });
 
