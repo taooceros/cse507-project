@@ -42,7 +42,9 @@ Each event has `mem-order ∈ {sc, acq, rel, rlx}`.
 ## Programs and Outcomes (see `verify.log`)
 - **P1 (all SC, safe)**: All ops use `sc`; tail/data pairings always match. Result: **UNSAT** (no violation).
 - **P2 (all Relaxed, buggy)**: All ops `rlx`; tail can be observed before data is ordered/visible. Result: **SAT** (stale data possible).
-- **P3 (Release/Acquire + Relaxed, safe)**: Producer uses `rel` for tail updates; consumer reads tail with `acq`; other ops are `rlx`. Result: **UNSAT** (no violation).
+- **P3 (over-conservative RA, safe)**: All writes use `rel`; all reads use `acq` (stronger than needed). Result: **UNSAT**.
+- **P4 (recommended RA, safe)**: Data writes/reads `rlx`; tail writes `rel`; tail reads `acq`. Result: **UNSAT**.
+- **P5 (buggy RA, missing release on first tail, unsafe)**: Producer “optimizes” by doing `tail1` as `rlx` and only `tail2` as `rel`, hoping one release covers both writes. This loses the release–acquire link between `tail1` and `DATA0`: before `tail2` is published, the consumer can read `tail1` with `acq` yet still see stale/old `DATA0` because that write was never released. Result: **SAT** (first slot can be stale).
 
 ## Caveats
 - Simplified single-host, multi-thread model; no RDMA network latency/QP ordering/flush semantics, no atomics beyond the mem-order rules above.

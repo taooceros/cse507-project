@@ -33,7 +33,7 @@
    (mk-write 10 2 HEAD 0 'sc)))
 
 ;; P2: Missing ordering; tail may expose before data visible
-(define (make-trace-p2a rvals)
+(define (make-trace-p2 rvals)
   (list
    ;; Producer: tail updates issued before data is guaranteed visible
    (mk-rdma-write 1 1 TAIL 1 'rlx)
@@ -49,16 +49,50 @@
    (mk-read 9 2 DATA1 (rv rvals 3) 'rlx)
    (mk-write 10 2 HEAD 0 'rlx)))
 
-;; P3: Tail and data interleaved without explicit order (no flush/QP)
-(define (make-trace-p2b rvals)
+;; P3: Overly strong RA (all writes release, reads acquire)
+(define (make-trace-p3 rvals)
   (list
-   ;; Producer without ordering primitives
+   ;; Producer: every write uses release (over-conservative)
+   (mk-rdma-write 1 1 DATA0 1 'rel)
+   (mk-rdma-write 2 1 TAIL 1 'rel)
+   (mk-rdma-write 3 1 DATA1 2 'rel)
+   (mk-rdma-write 4 1 TAIL 2 'rel)
+
+   ;; Consumer: all reads acquire
+   (mk-read 5 2 TAIL (rv rvals 0) 'acq)
+   (mk-read 6 2 DATA0 (rv rvals 1) 'acq)
+   (mk-write 7 2 HEAD 1 'rlx)
+   (mk-read 8 2 TAIL (rv rvals 2) 'acq)
+   (mk-read 9 2 DATA1 (rv rvals 3) 'acq)
+   (mk-write 10 2 HEAD 0 'rlx)))
+
+;; P4: Recommended RA usage (data relaxed, tail release, tail reads acquire)
+(define (make-trace-p4 rvals)
+  (list
+   ;; Producer: data relaxed, tail release
    (mk-rdma-write 1 1 DATA0 1 'rlx)
    (mk-rdma-write 2 1 TAIL 1 'rel)
    (mk-rdma-write 3 1 DATA1 2 'rlx)
    (mk-rdma-write 4 1 TAIL 2 'rel)
 
-   ;; Consumer
+   ;; Consumer: tail acquire, data relaxed
+   (mk-read 5 2 TAIL (rv rvals 0) 'acq)
+   (mk-read 6 2 DATA0 (rv rvals 1) 'rlx)
+   (mk-write 7 2 HEAD 1 'rlx)
+   (mk-read 8 2 TAIL (rv rvals 2) 'acq)
+   (mk-read 9 2 DATA1 (rv rvals 3) 'rlx)
+   (mk-write 10 2 HEAD 0 'rlx)))
+
+;; P5: Misused RA (first tail publish missing release; stale first slot)
+(define (make-trace-p5 rvals)
+  (list
+   ;; Producer: first tail mistakenly relaxed (no release), second tail uses release
+   (mk-rdma-write 1 1 DATA0 1 'rlx)
+   (mk-rdma-write 2 1 TAIL 1 'rlx) ;; missing release here
+   (mk-rdma-write 3 1 DATA1 2 'rlx)
+   (mk-rdma-write 4 1 TAIL 2 'rel)
+
+   ;; Consumer: tail reads acquire both times
    (mk-read 5 2 TAIL (rv rvals 0) 'acq)
    (mk-read 6 2 DATA0 (rv rvals 1) 'rlx)
    (mk-write 7 2 HEAD 1 'rlx)

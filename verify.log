@@ -53,11 +53,67 @@ P2 Failed! Counterexample found.
  [b$111 #f]
  [r$125 0]
  [r$134 0])
-Verifying P3 (Incorrect)...
-Reads: (#(struct:event 5 2 read 2 rv$136 acq) #(struct:event 6 2 read 0 rv$137 rlx) #(struct:event 8 2 read 2 rv$138 acq) #(struct:event 9 2 read 1 rv$139 rlx))
-Writes: (#(struct:event -1 -1 write 0 0 sc) #(struct:event -2 -1 write 1 0 sc) #(struct:event -3 -1 write 2 0 sc) #(struct:event -4 -1 write 3 0 sc) #(struct:event 1 1 rdma-write 0 1 rlx) #(struct:event 2 1 rdma-write 2 1 rel) #(struct:event 3 1 rdma-write 1 2 rlx) #(struct:event 4 1 rdma-write 2 2 rel) #(struct:event 7 2 write 3 1 rlx) #(struct:event 10 2 write 3 0 rlx))
+Verifying P3 (Over-conservative)...
+Reads: (#(struct:event 5 2 read 2 rv$136 acq) #(struct:event 6 2 read 0 rv$137 acq) #(struct:event 8 2 read 2 rv$138 acq) #(struct:event 9 2 read 1 rv$139 acq))
+Writes: (#(struct:event -1 -1 write 0 0 sc) #(struct:event -2 -1 write 1 0 sc) #(struct:event -3 -1 write 2 0 sc) #(struct:event -4 -1 write 3 0 sc) #(struct:event 1 1 rdma-write 0 1 rel) #(struct:event 2 1 rdma-write 2 1 rel) #(struct:event 3 1 rdma-write 1 2 rel) #(struct:event 4 1 rdma-write 2 2 rel) #(struct:event 7 2 write 3 1 rlx) #(struct:event 10 2 write 3 0 rlx))
 Baseline constraints SAT? #t
 Base rf choices matrix: ((b$140 b$141 b$142 b$143 b$144 #f b$146 b$147 b$148 b$149) (b$150 b$151 b$152 b$153 b$154 b$155 b$156 b$157 b$158 b$159) (b$160 b$161 b$162 b$163 b$164 b$165 b$166 #f b$168 b$169) (#f #f #f #f #f #t #f #f #f #f))
 Base read values: (0 2 1 1)
 Debug (fixed rf choices) skipped in generalized model.
 P3 Verified! No violation found.
+
+Verifying P4 (Recommended RA)...
+Reads: (#(struct:event 5 2 read 2 rv$204 acq) #(struct:event 6 2 read 0 rv$205 rlx) #(struct:event 8 2 read 2 rv$206 acq) #(struct:event 9 2 read 1 rv$207 rlx))
+Writes: (#(struct:event -1 -1 write 0 0 sc) #(struct:event -2 -1 write 1 0 sc) #(struct:event -3 -1 write 2 0 sc) #(struct:event -4 -1 write 3 0 sc) #(struct:event 1 1 rdma-write 0 1 rlx) #(struct:event 2 1 rdma-write 2 1 rel) #(struct:event 3 1 rdma-write 1 2 rlx) #(struct:event 4 1 rdma-write 2 2 rel) #(struct:event 7 2 write 3 1 rlx) #(struct:event 10 2 write 3 0 rlx))
+Baseline constraints SAT? #t
+Base rf choices matrix: ((b$208 b$209 b$210 b$211 b$212 #f b$214 b$215 b$216 b$217) (b$218 b$219 b$220 b$221 b$222 b$223 b$224 b$225 b$226 b$227) (b$228 b$229 b$230 b$231 b$232 b$233 b$234 #f b$236 b$237) (#f #f #f #f #f #t #f #f #f #f))
+Base read values: (0 2 1 1)
+Debug (fixed rf choices) skipped in generalized model.
+P4 Verified! No violation found.
+
+Verifying P5 (Buggy RA)...
+Reads: (#(struct:event 5 2 read 2 rv$272 acq) #(struct:event 6 2 read 0 rv$273 rlx) #(struct:event 8 2 read 2 rv$274 acq) #(struct:event 9 2 read 1 rv$275 rlx))
+Writes: (#(struct:event -1 -1 write 0 0 sc) #(struct:event -2 -1 write 1 0 sc) #(struct:event -3 -1 write 2 0 sc) #(struct:event -4 -1 write 3 0 sc) #(struct:event 1 1 rdma-write 0 1 rlx) #(struct:event 2 1 rdma-write 2 1 rlx) #(struct:event 3 1 rdma-write 1 2 rlx) #(struct:event 4 1 rdma-write 2 2 rel) #(struct:event 7 2 write 3 1 rlx) #(struct:event 10 2 write 3 0 rlx))
+Baseline constraints SAT? #t
+Base rf choices matrix: ((b$276 b$277 b$278 b$279 b$280 #f b$282 b$283 b$284 b$285) (b$286 b$287 b$288 b$289 b$290 b$291 b$292 b$293 b$294 b$295) (b$296 b$297 b$298 b$299 b$300 b$301 b$302 #f b$304 b$305) (#f #f #f #f #f #f #f #f #t #f))
+Base read values: (0 rv$273 1 1)
+Debug (fixed rf choices) skipped in generalized model.
+Model found. Ranks:
+Event -1 (Type write): Rank r$326
+Event -2 (Type write): Rank r$327
+Event -3 (Type write): Rank r$328
+Event -4 (Type write): Rank 0
+Event 1 (Type rdma-write): Rank r$330
+Event 2 (Type rdma-write): Rank r$331
+Event 3 (Type rdma-write): Rank r$332
+Event 4 (Type rdma-write): Rank r$333
+Event 5 (Type read): Rank r$334
+Event 6 (Type read): Rank r$335
+Event 7 (Type write): Rank r$336
+Event 8 (Type read): Rank r$337
+Event 9 (Type read): Rank 0
+Event 10 (Type write): Rank r$339
+Read values: (1 2 2 2)
+RF matrix (resolved): ((b$276 b$277 b$278 b$279 b$280 #t b$282 b$283 b$284 b$285) (b$286 b$287 b$288 b$289 b$290 b$291 b$292 b$293 b$294 b$295) (b$296 b$297 b$298 b$299 b$300 b$301 b$302 #t b$304 b$305) (#f #f #f #f #f #f #t #f #f #f))
+rf-constraints satisfied? #t
+latest-visible? #t
+P5 Failed! Counterexample found.
+(model
+ [rv$272 1]
+ [rv$273 2]
+ [rv$274 2]
+ [rv$275 2]
+ [b$281 #t]
+ [b$303 #t]
+ [b$306 #f]
+ [b$307 #f]
+ [b$308 #f]
+ [b$309 #f]
+ [b$310 #f]
+ [b$311 #f]
+ [b$312 #t]
+ [b$313 #f]
+ [b$314 #f]
+ [b$315 #f]
+ [r$329 0]
+ [r$338 0])
