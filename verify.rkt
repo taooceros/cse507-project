@@ -112,53 +112,6 @@
                               #f))))
         #t))
 
-  ;; Release-acquire style: if a read observes a write w_rel, then any producer
-  ;; write w_pre that is ppo-before w_rel must become visible to subsequent reads
-  ;; of the same address in the reading thread.
-  (define release-acquire-constraint
-    (for/and ([r_acq reads] [w_rel writes])
-      (implies (rf-rel w_rel r_acq)
-               (for/and ([w_pre writes])
-                 (implies (and (equal? (event-thread-id w_pre) (event-thread-id w_rel))
-                               (ppo-fn full-trace w_pre w_rel))
-                          (for/and ([r_use reads])
-                            (implies (and (ppo-fn full-trace r_acq r_use)
-                                          (equal? (event-addr r_use) (event-addr w_pre)))
-                                     (and (< (get-rank w_pre) (get-rank r_use))
-                                          (for/and ([w_src writes])
-                                            (implies (rf-rel w_src r_use)
-                                                     (not (co-rel w_src w_pre))))))))))))
-
-  ;; Derived happens-before: if r_acq reads from w_rel, then anything ppo-before w_rel
-  ;; must happen before anything ppo-after r_acq.
-  (define derived-hb-constraint
-    (for/and ([r_acq reads] [w_rel writes])
-      (implies (rf-rel w_rel r_acq)
-               (for/and ([w_pre writes])
-                 (implies (ppo-fn full-trace w_pre w_rel)
-                          (for/and ([e_post full-trace])
-                            (implies (ppo-fn full-trace r_acq e_post)
-                                     (< (get-rank w_pre) (get-rank e_post)))))))))
-
-  ;; Strong fence publish: if a write w has a fence before it in the same thread,
-  ;; any earlier write in that thread must be before any read that observes w.
-  (define (has-fence-between? w_pre w)
-    (ormap (lambda (f)
-             (and (equal? (event-thread-id f) (event-thread-id w))
-                  (equal? (event-type f) 'fence)
-                  (< (event-id w_pre) (event-id f))
-                  (< (event-id f) (event-id w))))
-           trace))
-
-  (define strong-fence-publish
-    (for/and ([r reads] [w writes])
-      (implies (rf-rel w r)
-               (for/and ([w_pre writes])
-                 (implies (and (equal? (event-thread-id w_pre) (event-thread-id w))
-                               (< (event-id w_pre) (event-id w))
-                               (has-fence-between? w_pre w))
-                          (< (get-rank w_pre) (get-rank r)))))))
-
   ;; Tie tail reads to corresponding data writes when tail is observed (demo-oriented).
   (define r-tail1 (list-ref reads 0))
   (define r-data0 (list-ref reads 1))
@@ -183,15 +136,6 @@
                                           (equal? (event-val e) 2)))
                          writes))
 
-  (define flushes (filter (lambda (e) (equal? (event-type e) 'flush)) full-trace))
-
-  (define (has-flush-between? w_data w_tail)
-    (ormap (lambda (f)
-             (and (equal? (event-qp f) (event-qp w_data))
-                  (po full-trace w_data f)
-                  (po full-trace f w_tail)))
-           flushes))
-
   (define tail-data-constraint
     (and
      ;; If tail reads a new value, it must come from the corresponding tail write.
@@ -199,15 +143,10 @@
               (and w-tail1 (rf-rel w-tail1 r-tail1)))
      (implies (>= (list-ref read-vals 2) 2)
               (and w-tail2 (rf-rel w-tail2 r-tail2)))
-     ;; If tail is read from tail write and there is a flush between data and tail on the same qp,
-     ;; corresponding data must match expected value (cross-qp flush gives no guarantee).
-     (implies (and w-tail1 w-data0 (rf-rel w-tail1 r-tail1)
-                   (equal? (event-qp w-tail1) (event-qp w-data0))
-                   (has-flush-between? w-data0 w-tail1))
+     ;; If tail is read from tail write, corresponding data should match expected value.
+     (implies (and w-tail1 (rf-rel w-tail1 r-tail1) w-data0)
               (equal? (list-ref read-vals 1) 1))
-     (implies (and w-tail2 w-data1 (rf-rel w-tail2 r-tail2)
-                   (equal? (event-qp w-tail2) (event-qp w-data1))
-                   (has-flush-between? w-data1 w-tail2))
+     (implies (and w-tail2 (rf-rel w-tail2 r-tail2) w-data1)
               (equal? (list-ref read-vals 3) 2))))
 
   (define acyclic-constraints
@@ -223,9 +162,6 @@
                                  acyclic-constraints
                                  rf-before-read
                                  latest-visible-constraint
-                                 release-acquire-constraint
-                                 derived-hb-constraint
-                                 strong-fence-publish
                                  tail-data-constraint))
 
   ;; Debug: check baseline consistency without the violation predicate.
@@ -275,8 +211,6 @@
         (printf "RF matrix (resolved): ~a\n" (evaluate rf-matrix sol))
         (printf "rf-constraints satisfied? ~a\n" (evaluate rf-constraints sol))
         (printf "latest-visible? ~a\n" (evaluate latest-visible-constraint sol))
-        (printf "release-acquire? ~a\n" (evaluate release-acquire-constraint sol))
-        (printf "derived-hb? ~a\n" (evaluate derived-hb-constraint sol))
         sol)))
 
 (define (run-case semantics)

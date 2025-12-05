@@ -4,28 +4,15 @@
 (require racket/list)
 
 
-;; Events (qp optional, mainly for RDMA ops)
-(struct event (id thread-id type addr val qp) #:transparent)
+;; Events
+(struct event (id thread-id type addr val) #:transparent)
 
-;; Event types are just symbols: 'read, 'write, 'fence
+;; Event types are just symbols: 'read, 'write
 
 
 ;; Helper to create events
-(define (mk-read id tid addr val) (event id tid 'read addr val #f))
-(define (mk-write id tid addr val) (event id tid 'write addr val #f))
-(define (mk-fence id tid) (event id tid 'fence #f #f #f))
-(define (mk-flush id tid qp) (event id tid 'flush #f #f qp))
-
-;; Execution trace: a list of events
-;; We will assume a fixed number of events for bounded verification.
-
-;; Relations are represented as functions: (id1 id2) -> boolean
-
-(define (make-relation trace name)
-  ;; For symbolic execution, we might want to synthesize this.
-  ;; But typically we define the relation based on the trace and some symbolic choices.
-  ;; For now, let's assume we pass in the relation as a function.
-  'placeholder)
+(define (mk-read id tid addr val) (event id tid 'read addr val))
+(define (mk-write id tid addr val) (event id tid 'write addr val))
 
 ;; Program Order (po)
 ;; e1 ->po e2 if same thread and e1.id < e2.id
@@ -57,18 +44,6 @@
                  (co w_prime e2)))
           trace))
 
-;; Graph utilities
-(define (transitive-closure rel trace)
-  ;; Naive implementation for small traces
-  ;; Returns a function (id1 id2) -> boolean
-  (define (tc x y)
-    (or (rel x y)
-        (exists (lambda (z) (and (tc x z) (tc z y))) trace)))
-  tc)
-;; Note: The above recursive TC is not good for Rosette. 
-;; Better to use matrix multiplication or iterative approach if trace size is fixed.
-;; For now, let's define acyclicity directly if possible, or use a bounded unrolling.
-
 ;; Rank-based acyclicity check
 (define (acyclic? rel trace)
   ;; For each event e, there exists a rank r(e).
@@ -88,34 +63,20 @@
 ;; RDMA Events are symbols: 'rdma-write, 'rdma-read
 
 
-;; Helper for RDMA with qp label
-(define (mk-rdma-write id tid addr val qp) (event id tid 'rdma-write addr val qp))
+;; Helper for RDMA
+(define (mk-rdma-write id tid addr val) (event id tid 'rdma-write addr val))
 
 ;; Relaxed Program Order (ppo)
-;; ppo includes:
-;; 1. Local dependencies (e.g. addr dependency, data dependency - simplified here to just program order for local ops if we assume SC local)
-;; 2. Fences order everything.
-;; 3. RDMA ops are NOT ordered with local ops or other RDMA ops unless fenced.
+;; Simplified: only orders local ops (reads/writes) within a thread.
 
 (define (is-local? e)
   (or (equal? (event-type e) 'read)
       (equal? (event-type e) 'write)))
 
-(define (is-fence? e)
-  (equal? (event-type e) 'fence))
-
-(define (same-qp? e1 e2)
-  (and (member (event-type e1) '(rdma-write flush))
-       (member (event-type e2) '(rdma-write flush))
-       (equal? (event-qp e1) (event-qp e2))))
-
 (define (ppo-relaxed trace e1 e2)
   (and (po trace e1 e2)
-       (or
-        ;; Strong local ordering (SC for local ops)
-        (and (is-local? e1) (is-local? e2))
-        ;; RDMA writes on the same QP are ordered
-        (same-qp? e1 e2))))
+       ;; Strong local ordering (SC for local ops)
+       (and (is-local? e1) (is-local? e2))))
 
 ;; SC Program Order: everything is ordered by program order.
 (define (ppo-sc trace e1 e2)
