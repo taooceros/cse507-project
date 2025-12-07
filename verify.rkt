@@ -48,19 +48,24 @@
   (define (bool->int b) (if b 1 0))
 
   (define rf-constraints
-    (for/and ([r reads] [ri (in-naturals)])
+    (apply &&
+     (for/list ([r reads] [ri (in-naturals)])
       (define choices (list-ref rf-matrix ri))
-      (and
+      (&&
+       ;; 1. Exactly one write must be chosen
        (= 1 (apply + (map bool->int choices)))
-       (for/and ([w writes] [wi (in-naturals)])
-         (implies (list-ref choices wi)
-                  (and (equal? (event-addr r) (event-addr w))
-                       (equal? (event-val r) (event-val w)))))
-       ;; Make the chosen value explicit to avoid underspecified models
+       
+       ;; 2. The chosen write MUST have the same address as the read.
+       (apply &&
+         (for/list ([w writes] [wi (in-naturals)])
+           (implies (list-ref choices wi)
+                    (equal? (event-addr r) (event-addr w)))))
+
+       ;; 3. The read value must equal the value of the chosen write.
        (= (event-val r)
           (apply + (for/list ([w writes] [wi (in-naturals)])
                      (* (bool->int (list-ref choices wi))
-                        (event-val w))))))))
+                        (event-val w)))))))))
 
   ;; 3. Synthesize CO
   ;; We only care about CO for same address.
