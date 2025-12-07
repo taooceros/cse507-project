@@ -36,10 +36,10 @@
 (define (make-trace-p2 rvals)
   (list
    ;; Producer: tail updates issued before data is guaranteed visible
-   (mk-rdma-write 1 1 TAIL 1 'rlx)
-   (mk-rdma-write 2 1 DATA0 1 'rlx)
-   (mk-rdma-write 3 1 TAIL 2 'rlx)
-   (mk-rdma-write 4 1 DATA1 2 'rlx)
+   (mk-rdma-write 1 1 DATA0 1 'rlx)
+   (mk-rdma-write 2 1 TAIL 1 'rlx)
+   (mk-rdma-write 3 1 DATA1 2 'rlx)
+   (mk-rdma-write 4 1 TAIL 2 'rlx)
 
    ;; Consumer
    (mk-read 5 2 TAIL (rv rvals 0) 'rlx)
