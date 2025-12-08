@@ -30,9 +30,6 @@
   (define writes (filter (lambda (e) (or (equal? (event-type e) 'write) 
                                          (equal? (event-type e) 'rdma-write))) full-trace))
 
-  (printf "Reads: ~a\n" reads)
-  (printf "Writes: ~a\n" writes)
-
   (define rf-matrix
     (for/list ([r reads])
       (for/list ([w writes])
@@ -40,8 +37,8 @@
         b)))
 
   (define (rf-rel w r)
-    (define r-idx (index-of reads r))
-    (define w-idx (index-of writes w))
+    (define r-idx (index-of reads r eq?))
+    (define w-idx (index-of writes w eq?))
     (and r-idx w-idx
          (list-ref (list-ref rf-matrix r-idx) w-idx)))
 
@@ -75,7 +72,7 @@
       rank))
       
   (define (get-co-rank w)
-    (list-ref write-ranks (index-of writes w)))
+    (list-ref write-ranks (index-of writes w eq?)))
     
   (define co-constraints
     (for/and ([w1 writes] [w2 writes])
@@ -97,7 +94,7 @@
 
   ;; Ranks for combined relation (used for acyclicity and visibility checks)
   (define ranks (for/list ([e full-trace]) (define-symbolic* r integer?) r))
-  (define (get-rank e) (list-ref ranks (index-of full-trace e)))
+  (define (get-rank e) (list-ref ranks (index-of full-trace e eq?)))
 
   ;; Basic timing: source write must happen before the read in rank order.
   (define rf-before-read
@@ -200,12 +197,12 @@
                                  tail-data-constraint))
 
   ;; Debug: check baseline consistency without the violation predicate.
-  (define base-sol (solve (assert (and rf-constraints co-constraints model-constraints))))
-  (printf "Baseline constraints SAT? ~a\n" (sat? base-sol))
-  (when (sat? base-sol)
-    (printf "Base rf choices matrix: ~a\n" (evaluate rf-matrix base-sol))
-    (printf "Base read values: ~a\n"
-            (evaluate read-vals base-sol)))
+  ;; (define base-sol (solve (assert (and rf-constraints co-constraints model-constraints))))
+  ;; (printf "Baseline constraints SAT? ~a\n" (sat? base-sol))
+  ;; (when (sat? base-sol)
+  ;;   (printf "Base rf choices matrix: ~a\n" (evaluate rf-matrix base-sol))
+  ;;   (printf "Base read values: ~a\n"
+  ;;           (evaluate read-vals base-sol)))
 
   ;; Violation: if consumer sees tail>=k, corresponding data_k should match expected-pairs.
   ;; Overwrite check: if later tail is seen but data still equals earlier round's expected value, flag stale overwrite.
@@ -231,21 +228,68 @@
     (for/and ([p expected-pairs] [i (in-range 0 4 2)])
       (= (list-ref read-vals i) (car p))))
 
-  ;; Debug: force the intuitive source choices (tail from post-fence write, data from init)
-  (printf "Debug (fixed rf choices) skipped in generalized model.\n")
-
   (define sol (solve (assert (and rf-constraints co-constraints model-constraints progress violation))))
   
   (if (unsat? sol)
       sol
       (begin
-        (printf "Model found. Ranks:\n")
-        (for ([e full-trace] [r ranks])
-          (printf "Event ~a (Type ~a): Rank ~a\n" (event-id e) (event-type e) (evaluate r sol)))
-        (printf "Read values: ~a\n" (evaluate read-vals sol))
-        (printf "RF matrix (resolved): ~a\n" (evaluate rf-matrix sol))
-        (printf "rf-constraints satisfied? ~a\n" (evaluate rf-constraints sol))
-        (printf "latest-visible? ~a\n" (evaluate latest-visible-constraint sol))
+        ;; Helper to name addresses
+        (define (addr->string a)
+          (cond [(= a 0) "DATA0"]
+                [(= a 1) "DATA1"]
+                [(= a 2) "TAIL"]
+                [(= a 3) "HEAD"]
+                [else (format "Addr~a" a)]))
+
+        ;; Ensure ranks are concrete even if solver didn't assign them
+        (define concrete-sol (complete-solution sol ranks))
+
+        ;; Resolve all values
+        (define resolved-ranks (evaluate ranks concrete-sol))
+        (define resolved-read-vals (evaluate read-vals concrete-sol))
+        (define resolved-rf-matrix (evaluate rf-matrix concrete-sol))
+
+        ;; Create a list of structured events
+        (define trace-events
+          (let loop ([es full-trace] [rs resolved-ranks] [r-idx 0] [acc '()])
+            (if (null? es)
+                (reverse acc)
+                (let* ([e (car es)]
+                       [r (car rs)]
+                       [type (event-type e)]
+                       [is-read (equal? type 'read)])
+                  
+                  (define val 
+                    (if is-read
+                        (list-ref resolved-read-vals r-idx)
+                        (event-val e)))
+                  
+                  (define src
+                    (if is-read
+                        (let* ([choices (list-ref resolved-rf-matrix r-idx)]
+                               [w-idx (index-of choices #t)])
+                          (if w-idx (list-ref writes w-idx) #f))
+                        #f))
+                  
+                  (loop (cdr es) (cdr rs) 
+                        (if is-read (add1 r-idx) r-idx)
+                        (cons (list r e val src) acc))))))
+        
+        ;; Sort by rank
+        (define sorted-trace (sort trace-events < #:key car))
+
+        ;; Print
+        (for ([item sorted-trace])
+          (match-define (list r e val src) item)
+          (printf "Rank ~a | T~a: ~a ~a = ~a (~a)"
+                  r (event-thread-id e) (event-type e)
+                  (addr->string (event-addr e))
+                  val (event-mem-order e))
+          (when src
+            (printf " <- Reads from Event ~a (T~a ~a)" 
+                    (event-id src) (event-thread-id src) (addr->string (event-addr src))))
+          (newline))
+        
         sol)))
 
 (define (run-case)
@@ -253,37 +297,26 @@
   (define sol-p1 (verify-ring-buffer make-trace-p1 4 '((1 . 1) (2 . 2))))
   (if (unsat? sol-p1)
       (printf "P1 Verified! No violation found.\n")
-      (begin
-        (printf "P1 Failed! Counterexample found.\n")
-        (print sol-p1)))
+      (printf "P1 Failed! Counterexample found.\n"))
   (printf "\nVerifying P2 (Incorrect)...\n")
   (define sol-p2 (verify-ring-buffer make-trace-p2 4 '((1 . 1) (2 . 2))))
   (if (unsat? sol-p2)
       (printf "P2 Verified! No violation found.\n")
-      (begin
-        (printf "P2 Failed! Counterexample found.\n")
-        (print sol-p2)))
+      (printf "P2 Failed! Counterexample found.\n"))
   (printf "\nVerifying P3 (Over-conservative)...\n")
   (define sol-p3 (verify-ring-buffer make-trace-p3 4 '((1 . 1) (2 . 2))))
   (if (unsat? sol-p3)
       (printf "P3 Verified! No violation found.\n")
-      (begin
-        (printf "P3 Failed! Counterexample found.\n")
-        (print sol-p3)))
+      (printf "P3 Failed! Counterexample found.\n"))
   (printf "\nVerifying P4 (Recommended RA)...\n")
   (define sol-p4 (verify-ring-buffer make-trace-p4 4 '((1 . 1) (2 . 2))))
   (if (unsat? sol-p4)
       (printf "P4 Verified! No violation found.\n")
-      (begin
-        (printf "P4 Failed! Counterexample found.\n")
-        (print sol-p4)))
+      (printf "P4 Failed! Counterexample found.\n"))
   (printf "\nVerifying P5 (Buggy RA)...\n")
   (define sol-p5 (verify-ring-buffer make-trace-p5 4 '((1 . 1) (2 . 2))))
   (if (unsat? sol-p5)
       (printf "P5 Verified! No violation found.\n")
-      (begin
-        (printf "P5 Failed! Counterexample found.\n")
-        (print sol-p5)))
-  )
+      (printf "P5 Failed! Counterexample found.\n")))
 
 (run-case)
