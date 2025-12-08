@@ -96,6 +96,18 @@
   (define ranks (for/list ([e full-trace]) (define-symbolic* r integer?) r))
   (define (get-rank e) (list-ref ranks (index-of full-trace e eq?)))
 
+  ;; Force meaningful ranks: program order within threads must be reflected in ranks
+  (define po-rank-constraints
+    (for/and ([e1 full-trace] [e2 full-trace])
+      (implies (and (equal? (event-thread-id e1) (event-thread-id e2))
+                    (< (event-id e1) (event-id e2)))
+               (< (get-rank e1) (get-rank e2)))))
+
+  ;; All ranks must be non-negative
+  (define rank-positive-constraints
+    (for/and ([e full-trace])
+      (>= (get-rank e) 0)))
+
   ;; Basic timing: source write must happen before the read in rank order.
   (define rf-before-read
     (for/and ([r reads] [w writes])
@@ -194,7 +206,9 @@
                                  latest-visible-constraint
                                  release-acquire-constraint
                                  sc-total-order
-                                 tail-data-constraint))
+                                 tail-data-constraint
+                                 po-rank-constraints
+                                 rank-positive-constraints))
 
   ;; Debug: check baseline consistency without the violation predicate.
   ;; (define base-sol (solve (assert (and rf-constraints co-constraints model-constraints))))
@@ -275,20 +289,27 @@
                         (if is-read (add1 r-idx) r-idx)
                         (cons (list r e val src) acc))))))
         
-        ;; Sort by rank
-        (define sorted-trace (sort trace-events < #:key car))
+        ;; Sort by rank, then by event-id for stable ordering
+        (define sorted-trace 
+          (sort trace-events 
+                (lambda (a b) 
+                  (let ([ra (car a)] [rb (car b)]
+                        [ida (event-id (cadr a))] [idb (event-id (cadr b))])
+                    (or (< ra rb)
+                        (and (= ra rb) (< ida idb)))))))
 
         ;; Print
+        (printf "=== Violation Trace ===\n")
         (for ([item sorted-trace])
           (match-define (list r e val src) item)
-          (printf "Rank ~a | T~a: ~a ~a = ~a (~a)"
-                  r (event-thread-id e) (event-type e)
+          (printf "[~a] T~a: ~a ~a = ~a (~a)"
+                  (event-id e) (event-thread-id e) (event-type e)
                   (addr->string (event-addr e))
                   val (event-mem-order e))
           (when src
-            (printf " <- Reads from Event ~a (T~a ~a)" 
-                    (event-id src) (event-thread-id src) (addr->string (event-addr src))))
+            (printf " <- from [~a]" (event-id src)))
           (newline))
+        (printf "=======================\n")
         
         sol)))
 
