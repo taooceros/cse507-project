@@ -25,9 +25,10 @@
 ;;
 ;; context is a hash with keys: 'read-vals 'reads 'writes 'rf-rel 'get-rank 'full-trace
 (define (verify-with-model make-trace read-count violation-fn
-                           #:progress-fn [progress-fn (lambda (ctx) #t)]
-                           #:extra-constraints-fn [extra-constraints-fn (lambda (ctx) #t)]
-                           #:trace-label [trace-label "Violation"])
+                            #:progress-fn [progress-fn (lambda (ctx) #t)]
+                            #:extra-constraints-fn [extra-constraints-fn (lambda (ctx) #t)]
+                            #:violation-inspector [inspector (lambda (ctx sol) (void))]
+                            #:trace-label [trace-label "Violation"])
   ;; Use bounded 8-bit integers to force concrete value assignment
   ;; This ensures all constraints are properly evaluated during solving
   (current-bitwidth #f)
@@ -306,7 +307,34 @@
           (newline))
         (printf "========================\n")
         
+        ;; Call the inspector with concrete values
+        (inspector ctx concrete-sol)
+        
         sol)))
+
+(define (inspect-deadlock ctx sol)
+  (define read-vals (hash-ref ctx 'read-vals))
+  (define resolved-read-vals (evaluate read-vals sol))
+  (printf "Violation Inspector [Deadlock]:\n")
+  (printf "  Consumer Read TAIL (Expected >= 1): ~a\n" (list-ref resolved-read-vals 0))
+  (printf "  Producer Read HEAD (Expected >= 1): ~a\n" (list-ref resolved-read-vals 1))
+  (printf "  -> DEADLOCK: Both saw 0 despite progress writes.\n"))
+
+(define (inspect-overwrite ctx sol)
+  (define read-vals (hash-ref ctx 'read-vals))
+  (define resolved-read-vals (evaluate read-vals sol))
+  (printf "Violation Inspector [Overwrite]:\n")
+  (printf "  Consumer Read TAIL: ~a\n" (list-ref resolved-read-vals 0))
+  (printf "  Consumer Read DATA0: ~a (Expected 1, got 2 is Overwrite)\n" (list-ref resolved-read-vals 1))
+  (printf "  Producer Read HEAD: ~a (Consumer signal)\n" (list-ref resolved-read-vals 2))
+  (printf "  -> OVERWRITE: Consumer saw new TAIL, Producer saw HEAD=1, BUT Consumer read NEW data (2).\n"))
+
+(define (inspect-stale-read ctx sol)
+  (define read-vals (hash-ref ctx 'read-vals))
+  (define resolved-read-vals (evaluate read-vals sol))
+  (printf "Violation Inspector [Stale Read]:\n")
+  (printf "  rvals: ~a\n" resolved-read-vals)
+  (printf "  -> Stale read detected in pairs.\n"))
 
 ;; ============================================================================
 ;; Stale-Read Violation for Ring Buffer (P1-P5)
@@ -484,7 +512,8 @@
   (define sol-p1 (verify-with-model make-trace-p1 4 
                    (make-stale-read-violation expected-pairs)
                    #:progress-fn (make-stale-read-progress expected-pairs)
-                   #:extra-constraints-fn (make-tail-data-constraints)))
+                   #:extra-constraints-fn (make-tail-data-constraints)
+                   #:violation-inspector inspect-stale-read))
   (if (unsat? sol-p1)
       (printf "P1 Verified! No violation found.\n")
       (printf "P1 Failed! Counterexample found.\n"))
@@ -493,7 +522,8 @@
   (define sol-p2 (verify-with-model make-trace-p2 4 
                    (make-stale-read-violation expected-pairs)
                    #:progress-fn (make-stale-read-progress expected-pairs)
-                   #:extra-constraints-fn (make-tail-data-constraints)))
+                   #:extra-constraints-fn (make-tail-data-constraints)
+                   #:violation-inspector inspect-stale-read))
   (if (unsat? sol-p2)
       (printf "P2 Verified! No violation found.\n")
       (printf "P2 Failed! Counterexample found.\n"))
@@ -502,7 +532,8 @@
   (define sol-p3 (verify-with-model make-trace-p3 4 
                    (make-stale-read-violation expected-pairs)
                    #:progress-fn (make-stale-read-progress expected-pairs)
-                   #:extra-constraints-fn (make-tail-data-constraints)))
+                   #:extra-constraints-fn (make-tail-data-constraints)
+                   #:violation-inspector inspect-stale-read))
   (if (unsat? sol-p3)
       (printf "P3 Verified! No violation found.\n")
       (printf "P3 Failed! Counterexample found.\n"))
@@ -511,7 +542,8 @@
   (define sol-p4 (verify-with-model make-trace-p4 4 
                    (make-stale-read-violation expected-pairs)
                    #:progress-fn (make-stale-read-progress expected-pairs)
-                   #:extra-constraints-fn (make-tail-data-constraints)))
+                   #:extra-constraints-fn (make-tail-data-constraints)
+                   #:violation-inspector inspect-stale-read))
   (if (unsat? sol-p4)
       (printf "P4 Verified! No violation found.\n")
       (printf "P4 Failed! Counterexample found.\n"))
@@ -520,7 +552,8 @@
   (define sol-p5 (verify-with-model make-trace-p5 4 
                    (make-stale-read-violation expected-pairs)
                    #:progress-fn (make-stale-read-progress expected-pairs)
-                   #:extra-constraints-fn (make-tail-data-constraints)))
+                   #:extra-constraints-fn (make-tail-data-constraints)
+                   #:violation-inspector inspect-stale-read))
   (if (unsat? sol-p5)
       (printf "P5 Verified! No violation found.\n")
       (printf "P5 Failed! Counterexample found.\n"))
@@ -533,7 +566,8 @@
                    (make-deadlock-violation)
                    #:progress-fn (make-deadlock-progress)
                    #:extra-constraints-fn (make-deadlock-stale-check)
-                   #:trace-label "Deadlock"))
+                   #:trace-label "Deadlock"
+                   #:violation-inspector inspect-deadlock))
   (if (unsat? sol-p6)
       (printf "P6 Verified! No deadlock possible.\n")
       (printf "P6 DEADLOCK DETECTED!\n"))
@@ -543,7 +577,8 @@
                    (make-deadlock-violation)
                    #:progress-fn (make-deadlock-progress)
                    #:extra-constraints-fn (make-deadlock-stale-check)
-                   #:trace-label "Deadlock"))
+                   #:trace-label "Deadlock"
+                   #:violation-inspector inspect-deadlock))
   (if (unsat? sol-p7)
       (printf "P7 Verified! No deadlock possible.\n")
       (printf "P7 DEADLOCK DETECTED!\n"))
@@ -553,7 +588,8 @@
                    (make-deadlock-violation)
                    #:progress-fn (make-deadlock-progress)
                    #:extra-constraints-fn (make-deadlock-stale-check)
-                   #:trace-label "Deadlock"))
+                   #:trace-label "Deadlock"
+                   #:violation-inspector inspect-deadlock))
   (if (unsat? sol-p8)
       (printf "P8 Verified! No deadlock possible.\n")
       (printf "P8 DEADLOCK DETECTED!\n"))
@@ -563,7 +599,8 @@
                    (make-deadlock-violation)
                    #:progress-fn (make-deadlock-progress)
                    #:extra-constraints-fn (make-deadlock-stale-check)
-                   #:trace-label "Deadlock"))
+                   #:trace-label "Deadlock"
+                   #:violation-inspector inspect-deadlock))
   (if (unsat? sol-p9)
       (printf "P9 Verified! No deadlock possible.\n")
       (printf "P9 DEADLOCK DETECTED!\n"))
@@ -573,7 +610,8 @@
   (define sol-p10 (verify-with-model make-trace-p10-overwrite-rlx 3 
                     (make-overwrite-violation)
                     #:progress-fn (make-overwrite-progress)
-                    #:trace-label "Overwrite"))
+                    #:trace-label "Overwrite"
+                    #:violation-inspector inspect-overwrite))
   (if (unsat? sol-p10)
       (printf "P10 Verified! No overwrite possible.\n")
       (printf "P10 OVERWRITE DETECTED!\n"))
@@ -582,7 +620,8 @@
   (define sol-p11 (verify-with-model make-trace-p11-overwrite-sc 3 
                     (make-overwrite-violation)
                     #:progress-fn (make-overwrite-progress)
-                    #:trace-label "Overwrite"))
+                    #:trace-label "Overwrite"
+                    #:violation-inspector inspect-overwrite))
   (if (unsat? sol-p11)
       (printf "P11 Verified! No overwrite possible.\n")
       (printf "P11 OVERWRITE DETECTED!\n"))
@@ -591,7 +630,8 @@
   (define sol-p12 (verify-with-model make-trace-p12-overwrite-acqrel 3 
                     (make-overwrite-violation)
                     #:progress-fn (make-overwrite-progress)
-                    #:trace-label "Overwrite"))
+                    #:trace-label "Overwrite"
+                    #:violation-inspector inspect-overwrite))
   (if (unsat? sol-p12)
       (printf "P12 Verified! No overwrite possible.\n")
       (printf "P12 OVERWRITE DETECTED!\n")))
