@@ -254,35 +254,6 @@
   ;; are properly evaluated during solving - no post-solve validation needed
   (define sol (solve (assert (and model-constraints extra-constraints progress violation))))
   
-  ;; Debug: print constraint values if SAT (before validation)
-  (when (sat? sol)
-    (printf "DEBUG: Checking init-rank-constraints\n")
-    (for ([e full-trace])
-      (define r (evaluate (get-rank e) sol))
-      (define id (event-id e))
-      (when (> id 0)
-        (when (not (or (and (number? r) (> r 0)) (not (number? r))))
-          (printf "  VIOLATION: Event [~a] has rank ~a but should be > 0\n" id r))))
-    
-    (printf "\nDEBUG: SC verification details\n")
-    (for ([r reads])
-      (when (equal? (event-mem-order r) 'sc)
-        (for ([w-src writes])
-          (when (evaluate (rf-rel w-src r) sol)
-            (printf "  Read [~a] RF from [~a]\n" (event-id r) (event-id w-src))
-            (printf "    w-src is init? ~a\n" (< (event-id w-src) 0))
-            (when (< (event-id w-src) 0)
-              (for ([w writes])
-                (when (and (> (event-id w) 0)
-                           (equal? (event-addr w) (event-addr r))
-                           (equal? (event-mem-order w) 'sc))
-                  (printf "    Non-init SC write [~a] same addr, rank=~a, read rank=~a\n"
-                          (event-id w)
-                          (evaluate (get-rank w) sol)
-                          (evaluate (get-rank r) sol))
-                  (printf "    Constraint: NOT (rank(w) < rank(r)) = ~a\n"
-                          (evaluate (not (< (get-rank w) (get-rank r))) sol))))))))))
-  
   ;; Return result
   (if (unsat? sol)
       sol
