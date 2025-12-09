@@ -99,3 +99,48 @@
    (mk-read 8 2 TAIL (rv rvals 2) 'acq)
    (mk-read 9 2 DATA1 (rv rvals 3) 'rlx)
    (mk-write 10 2 HEAD 0 'rlx)))
+
+;; Deadlock scenario: Both threads complete their respective writes, then both
+;; try to read and see stale values (both would sleep indefinitely).
+;;
+;; Scenario timeline:
+;; 1. Producer writes DATA0=1, writes TAIL=1 (completing a produce cycle)
+;; 2. Consumer reads TAIL=1, reads DATA0=1, writes HEAD=1 (completing a consume cycle)
+;; 3. NOW both check again:
+;;    - Producer reads HEAD (hoping to see 1 from consumer's write)
+;;    - Consumer reads TAIL (hoping to see 2 from producer's next write, but producer hasn't written)
+;;
+;; For deadlock: Producer sees HEAD=0 (stale), Consumer sees TAIL=0 (stale, before producer's write)
+;; This is only possible with weak memory ordering.
+
+;; P6: Deadlock scenario (Relaxed) - SHOULD deadlock
+(define (make-trace-p6-deadlock-rlx rvals)
+  (list
+   ;; Phase 1: Producer writes data and updates tail
+   (mk-rdma-write 1 1 DATA0 1 'rlx)
+   (mk-rdma-write 2 1 TAIL 1 'rlx)
+
+   ;; Phase 2: Consumer consumes and writes head
+   (mk-read 3 2 TAIL (rv rvals 2) 'rlx)  ;; Consumer checks TAIL (should be 1)
+   (mk-read 4 2 DATA0 (rv rvals 3) 'rlx) ;; Consumer reads DATA0
+   (mk-write 5 2 HEAD 1 'rlx)            ;; Consumer writes HEAD=1
+
+   ;; Phase 3: Both check again for next round - this is where deadlock can occur
+   (mk-read 6 1 HEAD (rv rvals 0) 'rlx)  ;; Producer reads HEAD
+   (mk-read 7 2 TAIL (rv rvals 1) 'rlx))) ;; Consumer reads TAIL
+
+;; P7: Deadlock scenario (SeqCst) - Should NOT deadlock
+(define (make-trace-p7-deadlock-sc rvals)
+  (list
+   ;; Phase 1: Producer writes data and updates tail
+   (mk-rdma-write 1 1 DATA0 1 'sc)
+   (mk-rdma-write 2 1 TAIL 1 'sc)
+
+   ;; Phase 2: Consumer consumes and writes head
+   (mk-read 3 2 TAIL (rv rvals 2) 'sc)  ;; Consumer checks TAIL
+   (mk-read 4 2 DATA0 (rv rvals 3) 'sc) ;; Consumer reads DATA0
+   (mk-write 5 2 HEAD 1 'sc)            ;; Consumer writes HEAD=1
+
+   ;; Phase 3: Both check again - SC should prevent observing stale values
+   (mk-read 6 1 HEAD (rv rvals 0) 'sc)  ;; Producer reads HEAD
+   (mk-read 7 2 TAIL (rv rvals 1) 'sc))) ;; Consumer reads TAIL
