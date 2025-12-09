@@ -66,6 +66,12 @@ impl RingBufferApi for RingBufSeq {
     }
 }
 
+fn print_header(title: &str) {
+    println!("\n================================================================================");
+    println!("{}", title);
+    println!("--------------------------------------------------------------------------------");
+}
+
 fn run_benchmark_raw<T: RingBufferApi>(name: &str, batch_size: usize) {
     let count = 131072; // 1MB buffer
     let ring = T::new(count);
@@ -74,10 +80,10 @@ fn run_benchmark_raw<T: RingBufferApi>(name: &str, batch_size: usize) {
     let producer_ring = ring.clone();
     let consumer_ring = ring.clone();
 
-    println!(
-        "Starting raw benchmark (get_space_buf/get_data_buf) for {}: 1GB transfer, 1MB ring buffer",
-        name
-    );
+    // println!(
+    //     "Starting raw benchmark (get_space_buf/get_data_buf) for {}: 1GB transfer, 1MB ring buffer",
+    //     name
+    // );
     let start = Instant::now();
 
     let producer_affinity = core_affinity::get_core_ids().unwrap()[12];
@@ -164,9 +170,9 @@ fn run_benchmark_raw<T: RingBufferApi>(name: &str, batch_size: usize) {
     let duration = start.elapsed();
     let mb = total_bytes as f64 / 1024.0 / 1024.0;
     let seconds = duration.as_secs_f64();
-    println!("{}: Transferred {} MB in {:.4} seconds", name, mb, seconds);
-    println!("{}: Throughput: {:.2} MB/s", name, mb / seconds);
-    println!("--------------------------------------------------");
+    // println!("{}: Transferred {} MB in {:.4} seconds", name, mb, seconds);
+    println!("{:<35} : {:>8.2} MB/s", name, mb / seconds);
+    // println!("--------------------------------------------------");
 }
 
 fn run_benchmark_read_write<T: RingBufferApi>(name: &str) {
@@ -178,10 +184,10 @@ fn run_benchmark_read_write<T: RingBufferApi>(name: &str) {
     let mut producer_ring = ring.clone();
     let consumer_ring = ring.clone();
 
-    println!(
-        "Starting read/write benchmark for {}: 1GB transfer, 1MB ring buffer, {}B chunks",
-        name, chunk_size
-    );
+    // println!(
+    //     "Starting read/write benchmark for {}: 1GB transfer, 1MB ring buffer, {}B chunks",
+    //     name, chunk_size
+    // );
     let start = Instant::now();
 
     let producer_affinity = core_affinity::get_core_ids().unwrap()[12];
@@ -238,38 +244,44 @@ fn run_benchmark_read_write<T: RingBufferApi>(name: &str) {
     let duration = start.elapsed();
     let mb = total_bytes as f64 / 1024.0 / 1024.0;
     let seconds = duration.as_secs_f64();
-    println!("{}: Transferred {} MB in {:.4} seconds", name, mb, seconds);
-    println!("{}: Throughput: {:.2} MB/s", name, mb / seconds);
-    println!("--------------------------------------------------");
+    // println!("{}: Transferred {} MB in {:.4} seconds", name, mb, seconds);
+    println!("{:<35} : {:>8.2} MB/s", name, mb / seconds);
+    // println!("--------------------------------------------------");
 }
 
 fn main() {
+    print_header("Raw Benchmark (Batch Size: 1)");
     run_benchmark_raw::<RingBuf>("RingBuf (Optimized)", 1);
     run_benchmark_raw::<RingBufSeq>("RingBufSeq (Sequential)", 1);
 
-    run_benchmark_raw::<RingBuf>("RingBuf (Optimized) (Large Batch Size)", usize::MAX);
-    run_benchmark_raw::<RingBufSeq>("RingBufSeq (Sequential) (Large Batch Size)", usize::MAX);
+    print_header("Raw Benchmark (Batch Size: MAX)");
+    run_benchmark_raw::<RingBuf>("RingBuf (Optimized)", usize::MAX);
+    run_benchmark_raw::<RingBufSeq>("RingBufSeq (Sequential)", usize::MAX);
 
+    print_header("Read/Write Benchmark (1B chunks)");
     run_benchmark_read_write::<RingBuf>("RingBuf (Optimized)");
     run_benchmark_read_write::<RingBufSeq>("RingBufSeq (Sequential)");
 
-    println!("--------------------------------------------------");
-    println!("Running deadlock test (Producer/Consumer sleep/wake)");
+    print_header("Deadlock Test (Producer/Consumer sleep/wake)");
     println!(
         "Expectation: RingBuf (Acquire/Release) may deadlock. RingBufSeq (SeqCst) should not."
     );
 
     // Uncomment to run deadlock test. It might hang forever!
     // run_deadlock_test::<RingBuf>("RingBuf (Optimized)");
+    print!("\nRunning RingBufSeq (Sequential)... ");
+    use std::io::Write;
+    std::io::stdout().flush().unwrap();
     run_deadlock_test::<RingBufSeq>("RingBufSeq (Sequential)");
-    println!("RingBufSeq passed deadlock test.");
+    println!("PASSED");
 
-    println!("Running RingBuf deadlock test... (Press Ctrl+C if it hangs)");
+    print!("Running RingBuf (Optimized)...     ");
+    std::io::stdout().flush().unwrap();
     run_deadlock_test::<RingBuf>("RingBuf (Optimized)");
-    println!("RingBuf passed deadlock test (Unexpected if it didn't hang).");
+    println!("PASSED (Unexpected)");
 }
 
-fn run_deadlock_test<T: RingBufferApi>(name: &str) {
+fn run_deadlock_test<T: RingBufferApi>(_name: &str) {
     let count = 131072; // 1MB buffer
     let ring = T::new(count);
     let total_bytes = 1024 * 1024 * 100; // 100MB
@@ -278,9 +290,9 @@ fn run_deadlock_test<T: RingBufferApi>(name: &str) {
     let producer_ring = ring.clone();
     let consumer_ring = ring.clone();
 
-    println!("Starting deadlock test for {}: 100MB transfer", name);
-    let start = Instant::now();
-
+    // println!("Starting deadlock test for {}: 100MB transfer", name);
+    let _start = Instant::now();
+    // ... rest of implementation remains the same until println ...
     let producer_affinity = core_affinity::get_core_ids().unwrap()[12];
     let consumer_affinity = core_affinity::get_core_ids().unwrap()[14];
 
@@ -406,8 +418,8 @@ fn run_deadlock_test<T: RingBufferApi>(name: &str) {
     producer.join().unwrap();
     consumer.join().unwrap();
 
-    let duration = start.elapsed();
-    let mb = total_bytes as f64 / 1024.0 / 1024.0;
-    let seconds = duration.as_secs_f64();
-    println!("{}: Transferred {} MB in {:.4} seconds", name, mb, seconds);
+    // let duration = start.elapsed();
+    // let mb = total_bytes as f64 / 1024.0 / 1024.0;
+    // let seconds = duration.as_secs_f64();
+    // println!("{}: Transferred {} MB in {:.4} seconds", name, mb, seconds);
 }
