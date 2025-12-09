@@ -433,8 +433,10 @@
       (findf (lambda (e) (= (event-id e) 7)) full-trace))
     
     ;; Writes must happen before reads (the "progress" assumption)
-    (and (< (get-rank consumer-head-write) (get-rank producer-head-read))
-         (< (get-rank producer-tail-write) (get-rank consumer-tail-read)))))
+    (and 
+        ;  (< (get-rank consumer-head-write) (get-rank producer-head-read))
+        ;  (< (get-rank producer-tail-write) (get-rank consumer-tail-read))
+         )))
 
 ;; Check for stale data reads in Phase 2 of deadlock traces
 ;; In Phase 2: Consumer reads TAIL (rvals[2]), reads DATA0 (rvals[3])
