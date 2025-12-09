@@ -144,3 +144,42 @@
    ;; Phase 3: Both check again - SC should prevent observing stale values
    (mk-read 6 1 HEAD (rv rvals 0) 'sc)  ;; Producer reads HEAD
    (mk-read 7 2 TAIL (rv rvals 1) 'sc))) ;; Consumer reads TAIL
+
+;; P8: Deadlock scenario (Acquire-Release) - SHOULD deadlock
+;; Acquire-release ordering provides synchronization between release stores
+;; and acquire loads on the SAME address, but NOT across different addresses.
+;; Producer's release on TAIL doesn't synchronize with Consumer's acquire on HEAD.
+(define (make-trace-p8-deadlock-acqrel rvals)
+  (list
+   ;; Phase 1: Producer writes data (relaxed) and updates tail (release)
+   (mk-rdma-write 1 1 DATA0 1 'rlx)
+   (mk-rdma-write 2 1 TAIL 1 'rel)     ;; Release semantics
+
+   ;; Phase 2: Consumer reads tail (acquire), reads data, writes head (release)
+   (mk-read 3 2 TAIL (rv rvals 2) 'acq)  ;; Acquire semantics
+   (mk-read 4 2 DATA0 (rv rvals 3) 'rlx)
+   (mk-write 5 2 HEAD 1 'rel)            ;; Release semantics
+
+   ;; Phase 3: Both check again - acq-rel is insufficient to prevent deadlock
+   ;; Producer acquires HEAD but there's no synchronization with Consumer's TAIL release
+   (mk-read 6 1 HEAD (rv rvals 0) 'acq)  ;; Acquire on HEAD
+   (mk-read 7 2 TAIL (rv rvals 1) 'acq)));; Acquire on TAIL
+
+;; P9: Deadlock scenario (SC on TAIL/HEAD only) - Should NOT deadlock
+;; Uses SeqCst only on TAIL and HEAD operations, relaxed for DATA.
+;; SC on synchronization variables provides total order needed to prevent deadlock.
+(define (make-trace-p9-deadlock-sc-tailhead rvals)
+  (list
+   ;; Phase 1: Producer writes data (relaxed) and updates tail (SC)
+   (mk-rdma-write 1 1 DATA0 1 'rlx)     ;; Relaxed for DATA
+   (mk-rdma-write 2 1 TAIL 1 'sc)       ;; SC for TAIL
+
+   ;; Phase 2: Consumer reads tail (SC), reads data (relaxed), writes head (SC)
+   (mk-read 3 2 TAIL (rv rvals 2) 'sc)  ;; SC for TAIL
+   (mk-read 4 2 DATA0 (rv rvals 3) 'rlx);; Relaxed for DATA
+   (mk-write 5 2 HEAD 1 'sc)            ;; SC for HEAD
+
+   ;; Phase 3: Both check again - SC on TAIL/HEAD should prevent deadlock
+   (mk-read 6 1 HEAD (rv rvals 0) 'sc)  ;; SC for HEAD
+   (mk-read 7 2 TAIL (rv rvals 1) 'sc)));; SC for TAIL
+

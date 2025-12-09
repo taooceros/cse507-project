@@ -414,6 +414,18 @@
     (and (< (get-rank consumer-head-write) (get-rank producer-head-read))
          (< (get-rank producer-tail-write) (get-rank consumer-tail-read)))))
 
+;; Check for stale data reads in Phase 2 of deadlock traces
+;; In Phase 2: Consumer reads TAIL (rvals[2]), reads DATA0 (rvals[3])
+;; ring buffer spec: if TAIL >= 1, then DATA0 must be 1 (not stale 0)
+(define (make-deadlock-stale-check)
+  (lambda (ctx)
+    (define read-vals (hash-ref ctx 'read-vals))
+    ;; rvals[2] = consumer TAIL read in phase 2
+    ;; rvals[3] = consumer DATA0 read in phase 2
+    ;; Violation: TAIL >= 1 but DATA0 != 1 (stale read)
+    (implies (>= (list-ref read-vals 2) 1)
+             (= (list-ref read-vals 3) 1))))
+
 ;; ============================================================================
 ;; Test Runner
 ;; ============================================================================
@@ -473,6 +485,7 @@
   (define sol-p6 (verify-with-model make-trace-p6-deadlock-rlx 4 
                    (make-deadlock-violation)
                    #:progress-fn (make-deadlock-progress)
+                   #:extra-constraints-fn (make-deadlock-stale-check)
                    #:trace-label "Deadlock"))
   (if (unsat? sol-p6)
       (printf "P6 Verified! No deadlock possible.\n")
@@ -482,9 +495,30 @@
   (define sol-p7 (verify-with-model make-trace-p7-deadlock-sc 4 
                    (make-deadlock-violation)
                    #:progress-fn (make-deadlock-progress)
+                   #:extra-constraints-fn (make-deadlock-stale-check)
                    #:trace-label "Deadlock"))
   (if (unsat? sol-p7)
       (printf "P7 Verified! No deadlock possible.\n")
-      (printf "P7 DEADLOCK DETECTED!\n")))
+      (printf "P7 DEADLOCK DETECTED!\n"))
+  
+  (printf "\nVerifying P8 (Deadlock - Acquire-Release)...\n")
+  (define sol-p8 (verify-with-model make-trace-p8-deadlock-acqrel 4 
+                   (make-deadlock-violation)
+                   #:progress-fn (make-deadlock-progress)
+                   #:extra-constraints-fn (make-deadlock-stale-check)
+                   #:trace-label "Deadlock"))
+  (if (unsat? sol-p8)
+      (printf "P8 Verified! No deadlock possible.\n")
+      (printf "P8 DEADLOCK DETECTED!\n"))
+  
+  (printf "\nVerifying P9 (Deadlock - SC on TAIL/HEAD only)...\n")
+  (define sol-p9 (verify-with-model make-trace-p9-deadlock-sc-tailhead 4 
+                   (make-deadlock-violation)
+                   #:progress-fn (make-deadlock-progress)
+                   #:extra-constraints-fn (make-deadlock-stale-check)
+                   #:trace-label "Deadlock"))
+  (if (unsat? sol-p9)
+      (printf "P9 Verified! No deadlock possible.\n")
+      (printf "P9 DEADLOCK DETECTED!\n")))
 
 (run-case)
