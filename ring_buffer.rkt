@@ -164,7 +164,6 @@
    ;; Producer acquires HEAD but there's no synchronization with Consumer's TAIL release
    (mk-read 6 1 HEAD (rv rvals 0) 'acq)  ;; Acquire on HEAD
    (mk-read 7 2 TAIL (rv rvals 1) 'acq)));; Acquire on TAIL
-
 ;; P9: Deadlock scenario (SC on TAIL/HEAD only) - Should NOT deadlock
 ;; Uses SeqCst only on TAIL and HEAD operations, relaxed for DATA.
 ;; SC on synchronization variables provides total order needed to prevent deadlock.
@@ -182,4 +181,75 @@
    ;; Phase 3: Both check again - SC on TAIL/HEAD should prevent deadlock
    (mk-read 6 1 HEAD (rv rvals 0) 'sc)  ;; SC for HEAD
    (mk-read 7 2 TAIL (rv rvals 1) 'sc)));; SC for TAIL
+
+;; ============================================================================
+;; OVERWRITE VERIFICATION
+;; ============================================================================
+;; Scenario: Verify producer doesn't overwrite DATA before consumer reads it.
+;; 
+;; Timeline:
+;; 1. Producer writes DATA0=1, TAIL=1 (first produce cycle)
+;; 2. Consumer reads TAIL, reads DATA0, writes HEAD=1 (consume cycle)
+;; 3. Producer reads HEAD (sees consumer finished), writes DATA0=2, TAIL=2 (second produce)
+;;
+;; Overwrite violation: Producer's second DATA0 write happens BEFORE consumer's DATA0 read
+;; This means consumer sees DATA0=2 instead of DATA0=1 (overwritten before read)
+;;
+;; rvals mapping:
+;;   [0] = consumer TAIL read (phase 2)
+;;   [1] = consumer DATA0 read (phase 2) - should see 1, not 2 (overwritten)
+;;   [2] = producer HEAD read (phase 3)
+
+;; P10: Overwrite scenario (Relaxed) - SHOULD detect overwrite violation
+(define (make-trace-p10-overwrite-rlx rvals)
+  (list
+   ;; Phase 1: Producer first produce cycle
+   (mk-rdma-write 1 1 DATA0 1 'rlx)     ;; First DATA0 write (value=1)
+   (mk-rdma-write 2 1 TAIL 1 'rlx)      ;; Signal data available
+
+   ;; Phase 2: Consumer reads and consumes
+   (mk-read 3 2 TAIL (rv rvals 0) 'rlx) ;; Consumer checks TAIL
+   (mk-read 4 2 DATA0 (rv rvals 1) 'rlx);; Consumer reads DATA0 (should be 1)
+   (mk-write 5 2 HEAD 1 'rlx)           ;; Consumer signals done
+
+   ;; Phase 3: Producer second produce cycle
+   (mk-read 6 1 HEAD (rv rvals 2) 'rlx) ;; Producer checks if consumer done
+   (mk-rdma-write 7 1 DATA0 2 'rlx)     ;; Second DATA0 write (value=2, overwrite)
+   (mk-rdma-write 8 1 TAIL 2 'rlx)))    ;; Signal new data
+
+;; P11: Overwrite scenario (SeqCst) - Should NOT have overwrite violation
+(define (make-trace-p11-overwrite-sc rvals)
+  (list
+   ;; Phase 1: Producer first produce cycle
+   (mk-rdma-write 1 1 DATA0 1 'sc)      ;; First DATA0 write (value=1)
+   (mk-rdma-write 2 1 TAIL 1 'sc)       ;; Signal data available
+
+   ;; Phase 2: Consumer reads and consumes
+   (mk-read 3 2 TAIL (rv rvals 0) 'sc)  ;; Consumer checks TAIL
+   (mk-read 4 2 DATA0 (rv rvals 1) 'sc) ;; Consumer reads DATA0 (should be 1)
+   (mk-write 5 2 HEAD 1 'sc)            ;; Consumer signals done
+
+   ;; Phase 3: Producer second produce cycle
+   (mk-read 6 1 HEAD (rv rvals 2) 'sc)  ;; Producer checks if consumer done
+   (mk-rdma-write 7 1 DATA0 2 'sc)      ;; Second DATA0 write (value=2, overwrite)
+   (mk-rdma-write 8 1 TAIL 2 'sc)))     ;; Signal new data
+
+;; P12: Overwrite scenario (Acquire-Release)
+;; TAIL/HEAD use acq-rel for synchronization, DATA uses relaxed.
+;; Acq-rel provides ordering guarantees via release-acquire synchronization.
+(define (make-trace-p12-overwrite-acqrel rvals)
+  (list
+   ;; Phase 1: Producer first produce cycle
+   (mk-rdma-write 1 1 DATA0 1 'rlx)     ;; First DATA0 write (relaxed)
+   (mk-rdma-write 2 1 TAIL 1 'rel)      ;; Release: signal data available
+
+   ;; Phase 2: Consumer reads and consumes
+   (mk-read 3 2 TAIL (rv rvals 0) 'acq) ;; Acquire: consumer checks TAIL
+   (mk-read 4 2 DATA0 (rv rvals 1) 'rlx);; Relaxed: consumer reads DATA0
+   (mk-write 5 2 HEAD 1 'rel)           ;; Release: consumer signals done
+
+   ;; Phase 3: Producer second produce cycle
+   (mk-read 6 1 HEAD (rv rvals 2) 'acq) ;; Acquire: producer checks if consumer done
+   (mk-rdma-write 7 1 DATA0 2 'rlx)     ;; Relaxed: second DATA0 write (overwrite)
+   (mk-rdma-write 8 1 TAIL 2 'rel)))    ;; Release: signal new data
 

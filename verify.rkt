@@ -30,7 +30,7 @@
                            #:trace-label [trace-label "Violation"])
   ;; Use bounded 8-bit integers to force concrete value assignment
   ;; This ensures all constraints are properly evaluated during solving
-  (current-bitwidth 8)
+  (current-bitwidth #f)
   
   ;; 1. Create symbolic values for reads
   (define read-vals
@@ -115,11 +115,34 @@
   (define (get-rank e) (list-ref ranks (index-of full-trace e eq?)))
 
   ;; Program order rank constraints
+  ;; STANDARD RELAXED MEMORY MODEL with ACQUIRE/RELEASE:
+  ;; 1. Program order is enforced if BOTH operations are SC.
+  ;; 2. ACQUIRE operations (including SC) act as a one-way barrier:
+  ;;    Operations AFTER an acquire cannot move BEFORE it.
+  ;; 3. RELEASE operations (including SC) act as a one-way barrier:
+  ;;    Operations BEFORE a release cannot move AFTER it.
+  ;; NOTE: Using apply && over for/list instead of for/and because for/and
+  ;; short-circuits with bounded bitwidth and doesn't properly accumulate symbolic expressions.
   (define po-rank-constraints
-    (for/and ([e1 full-trace] [e2 full-trace])
-      (implies (and (equal? (event-thread-id e1) (event-thread-id e2))
-                    (< (event-id e1) (event-id e2)))
-               (< (get-rank e1) (get-rank e2)))))
+    (apply &&
+      (for/list ([e1 full-trace])
+        (apply &&
+          (for/list ([e2 full-trace])
+            (implies (and (equal? (event-thread-id e1) (event-thread-id e2))
+                          (< (event-id e1) (event-id e2)))
+                     (implies (or 
+                               ;; SC total order part (SC before SC preserved)
+                               (and (equal? (event-mem-order e1) 'sc)
+                                    (equal? (event-mem-order e2) 'sc))
+                               ;; Acquire barrier: e1 is ACQUIRE (or SC)
+                               ;; Subsequent ops (e2) cannot move before e1.
+                               (or (equal? (event-mem-order e1) 'acq)
+                                   (equal? (event-mem-order e1) 'sc))
+                               ;; Release barrier: e2 is RELEASE (or SC)
+                               ;; Preceding ops (e1) cannot move after e2.
+                               (or (equal? (event-mem-order e2) 'rel)
+                                   (equal? (event-mem-order e2) 'sc)))
+                              (< (get-rank e1) (get-rank e2)))))))))
 
   ;; Init writes must be ranked before all program events
   ;; Force init ranks to be concrete: init event with ID -k gets rank -k
@@ -427,6 +450,59 @@
              (= (list-ref read-vals 3) 1))))
 
 ;; ============================================================================
+;; Overwrite Violation (P10-P11)
+;; ============================================================================
+
+;; Overwrite violation: 
+;; - Producer sees HEAD=1 (consumer signaled it finished first item)
+;; - But consumer reads DATA0=2 (producer overwrote before consumer finished reading)
+;; This is a reordering race: consumer wrote HEAD=1 before reading DATA0!
+(define (make-overwrite-violation)
+  (lambda (ctx)
+    (define read-vals (hash-ref ctx 'read-vals))
+    ;; rvals[0] = consumer TAIL read (should see 1)
+    ;; rvals[1] = consumer DATA0 read (should see 1, NOT 2)
+    ;; rvals[2] = producer HEAD read (sees 1 = consumer done)
+    ;; Violation: TAIL>=1, DATA0=2 (overwritten), HEAD=1 (producer sees consumer done)
+    (and (>= (list-ref read-vals 0) 1)   ;; Consumer sees TAIL=1
+         (= (list-ref read-vals 1) 2)     ;; Consumer reads DATA0=2 (overwritten!)
+         (= (list-ref read-vals 2) 1))))  ;; Producer sees HEAD=1 (consumer "done")
+
+;; Progress for overwrite scenario:
+;; - Producer's first TAIL write [2] happens before consumer's TAIL read [3]
+;; - Consumer's HEAD write [5] happens before producer's HEAD read [6]
+;;   (producer sees HEAD=1, thinks consumer is done)
+;; - Producer's second DATA write [7] happens before consumer's DATA read [4]
+;;   (but consumer hasn't actually read DATA yet - REORDERING!)
+(define (make-overwrite-progress)
+  (lambda (ctx)
+    (define full-trace (hash-ref ctx 'full-trace))
+    (define get-rank (hash-ref ctx 'get-rank))
+    
+    ;; Find events
+    (define first-tail-write (findf (lambda (e) (= (event-id e) 2)) full-trace))
+    (define consumer-tail-read (findf (lambda (e) (= (event-id e) 3)) full-trace))
+    (define consumer-data-read (findf (lambda (e) (= (event-id e) 4)) full-trace))
+    (define consumer-head-write (findf (lambda (e) (= (event-id e) 5)) full-trace))
+    (define producer-head-read (findf (lambda (e) (= (event-id e) 6)) full-trace))
+    (define second-data-write (findf (lambda (e) (= (event-id e) 7)) full-trace))
+    
+    ;; Producer sees consumer done (HEAD write before HEAD read)
+    ;; BUT producer writes new data before consumer reads old data (RACE!)
+    (and (< (get-rank first-tail-write) (get-rank consumer-tail-read))
+         (< (get-rank consumer-head-write) (get-rank producer-head-read))
+         (< (get-rank second-data-write) (get-rank consumer-data-read)))))
+
+;; Extra constraint for overwrite: ring buffer spec
+;; If consumer sees TAIL >= 1, DATA0 should be 1 (first write), not 0 (init) or 2 (overwrite)
+(define (make-overwrite-spec)
+  (lambda (ctx)
+    (define read-vals (hash-ref ctx 'read-vals))
+    ;; If TAIL >= 1, DATA0 must be 1
+    (implies (>= (list-ref read-vals 0) 1)
+             (= (list-ref read-vals 1) 1))))
+
+;; ============================================================================
 ;; Test Runner
 ;; ============================================================================
 
@@ -519,6 +595,34 @@
                    #:trace-label "Deadlock"))
   (if (unsat? sol-p9)
       (printf "P9 Verified! No deadlock possible.\n")
-      (printf "P9 DEADLOCK DETECTED!\n")))
+      (printf "P9 DEADLOCK DETECTED!\n"))
+  
+  ;; Overwrite verification
+  (printf "\nVerifying P10 (Overwrite - Relaxed)...\n")
+  (define sol-p10 (verify-with-model make-trace-p10-overwrite-rlx 3 
+                    (make-overwrite-violation)
+                    #:progress-fn (make-overwrite-progress)
+                    #:trace-label "Overwrite"))
+  (if (unsat? sol-p10)
+      (printf "P10 Verified! No overwrite possible.\n")
+      (printf "P10 OVERWRITE DETECTED!\n"))
+  
+  (printf "\nVerifying P11 (Overwrite - SeqCst)...\n")
+  (define sol-p11 (verify-with-model make-trace-p11-overwrite-sc 3 
+                    (make-overwrite-violation)
+                    #:progress-fn (make-overwrite-progress)
+                    #:trace-label "Overwrite"))
+  (if (unsat? sol-p11)
+      (printf "P11 Verified! No overwrite possible.\n")
+      (printf "P11 OVERWRITE DETECTED!\n"))
+  
+  (printf "\nVerifying P12 (Overwrite - Acquire-Release)...\n")
+  (define sol-p12 (verify-with-model make-trace-p12-overwrite-acqrel 3 
+                    (make-overwrite-violation)
+                    #:progress-fn (make-overwrite-progress)
+                    #:trace-label "Overwrite"))
+  (if (unsat? sol-p12)
+      (printf "P12 Verified! No overwrite possible.\n")
+      (printf "P12 OVERWRITE DETECTED!\n")))
 
 (run-case)
